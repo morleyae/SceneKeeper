@@ -27,7 +27,8 @@
       "Windows can now install updates while After Effects stays open, like macOS.",
       "Restarting the extension no longer creates another backup if one was saved in the last 10 minutes."
     ],
-    "1.0.29": ["The full “by morley.ae” credit now links to TikTok."]
+    "1.0.29": ["The full “by morley.ae” credit now links to TikTok."],
+    "1.0.30": ["The Random Clips Between Markers button now matches the height of the other clip buttons."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");

@@ -1892,6 +1892,16 @@
       white-space: nowrap;
     }
 
+    #random-marker-insert-open {
+      min-height: 32px;
+      height: 32px;
+      margin-top: 4px;
+      padding: 4px 2px;
+      font-size: 10px;
+      line-height: 1.15;
+      white-space: nowrap;
+    }
+
     .library-actions svg { display: block; width: 16px; height: 16px; }
 
     .library-actions svg path {
