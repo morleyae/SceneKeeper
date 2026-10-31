@@ -25,14 +25,9 @@ fail() {
 
 [[ -n "$ARCHIVE" && -n "$TARGET" && -f "$ARCHIVE" ]] || fail "The update archive or install path is missing."
 
-# Keep this installer independent from After Effects and tell the user to wait
-# for the completion dialog before launching AE again.
-show_dialog "The SceneKeeper ${VERSION} update is ready. Quit After Effects completely, then click OK here. Keep AE closed until the 'SceneKeeper updated' confirmation appears." "SceneKeeper update"
-
-# Wait until every After Effects process has exited before replacing its panel.
-while pgrep -f '/Adobe After Effects[^/]*/.*After Effects' >/dev/null 2>&1; do
-  sleep 2
-done
+# macOS permits replacing an extension directory while AE is open. The
+# currently loaded panel keeps running from memory; the new files are used
+# after AE restarts.
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/scenekeeper-update.XXXXXX")" || fail "Could not create a temporary install folder."
 unzip -q "$ARCHIVE" -d "$WORK_DIR" || { rm -rf "$WORK_DIR"; fail "Could not extract the update archive."; }

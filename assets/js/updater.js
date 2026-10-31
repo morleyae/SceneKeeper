@@ -184,7 +184,7 @@
     if (noticeMessage) {
       noticeMessage.textContent = isWindows
         ? `Installer started for ${version}. Close After Effects and wait for the installation confirmation before reopening AE.`
-        : `Installer started for ${version}. Close AE, confirm the update dialog, and wait for the completion dialog before reopening.`;
+        : `Installing ${version} while After Effects stays open. Restart AE after the installation confirmation appears.`;
     }
     if (retryUpdateButton) {
       retryUpdateButton.disabled = true;
