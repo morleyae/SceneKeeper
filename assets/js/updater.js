@@ -1,9 +1,15 @@
 (function () {
   const config = window.SceneKeeperUpdateConfig || {};
   const notice = document.getElementById("scene-keeper-update-notice");
+  const versionLabel = document.getElementById("scene-keeper-version");
   const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
   const LAST_CHECK_KEY = "scenekeeper.update.lastCheck";
   let started = false;
+
+  if (versionLabel) {
+    const currentVersion = String(config.currentVersion || "").replace(/^v/i, "");
+    versionLabel.textContent = currentVersion ? `SceneKeeper v${currentVersion}` : "SceneKeeper";
+  }
 
   function compareVersions(first, second) {
     const parse = (version) => String(version || "").replace(/^v/i, "").split(".").map((part) => Number(part) || 0);
