@@ -3291,6 +3291,23 @@ function sceneParseRandomFolderSelection(folderId) {
     return selection;
 }
 
+function sceneReadRandomMarkerFolderSelection(encodedFolderSelection) {
+    var folderSelectionText = decodeURIComponent(encodedFolderSelection || "");
+    if (folderSelectionText.indexOf("FILE:") !== 0) return folderSelectionText;
+
+    var selectionFile = new File(folderSelectionText.substring(5));
+    if (!selectionFile.exists) throw new Error("The temporary source-folder selection is missing. Reopen the dialog and try again.");
+    selectionFile.encoding = "UTF-8";
+    if (!selectionFile.open("r")) throw new Error("The temporary source-folder selection could not be opened.");
+    try {
+        folderSelectionText = selectionFile.read();
+    } finally {
+        selectionFile.close();
+    }
+    try { selectionFile.remove(); } catch (removeSelectionFileError) {}
+    return folderSelectionText;
+}
+
 function sceneRandomFolderIsIncluded(folderId, selection) {
     var currentId = String(folderId || "");
     var visited = {};
@@ -3315,7 +3332,9 @@ function insertRandomClipsBetweenMarkers(encodedFolderId, createPrecomps, encode
     if (!markerProperty || markerProperty.numKeys < 2) {
         return "ERROR: Add at least two composition markers to define an interval.";
     }
-    var folderId = decodeURIComponent(encodedFolderId || "");
+    var folderId;
+    try { folderId = sceneReadRandomMarkerFolderSelection(encodedFolderId); }
+    catch (folderReadError) { return "ERROR: " + folderReadError.toString().replace(/^Error: ?/, ""); }
     var folderSelection;
     try { folderSelection = sceneParseRandomFolderSelection(folderId); }
     catch (selectionError) { return "ERROR: " + selectionError.toString().replace(/^Error: ?/, ""); }

@@ -6149,6 +6149,30 @@
         randomMarkerInsertDialog.hidden = true;
       }
     });
+    function writeRandomMarkerFolderSelectionFile(selectionText) {
+      const cep = window.cep;
+      const fs = cep && cep.fs;
+      if (!cep || typeof cep.getSystemPath !== "function" || !fs || typeof fs.writeFile !== "function") return "";
+      let userDataPath = String(cep.getSystemPath("userData") || "").replace(/^file:\/\//, "");
+      try { userDataPath = decodeURI(userDataPath); } catch (error) {}
+      userDataPath = userDataPath.replace(/\\/g, "/").replace(/\/$/, "");
+      if (/^\/[A-Za-z]:\//.test(userDataPath)) userDataPath = userDataPath.substring(1);
+      if (!userDataPath) return "";
+
+      const selectionDirectory = `${userDataPath}/SceneKeeper`;
+      const directoryStat = fs.stat(selectionDirectory);
+      const directoryExists = directoryStat && directoryStat.err === 0 && directoryStat.data &&
+        typeof directoryStat.data.isDirectory === "function" && directoryStat.data.isDirectory();
+      if (!directoryExists) {
+        const createdDirectory = fs.makedir(selectionDirectory);
+        if (!createdDirectory || createdDirectory.err !== 0) return "";
+      }
+
+      const selectionFilePath = `${selectionDirectory}/random-marker-folder-selection.json`;
+      const written = fs.writeFile(selectionFilePath, selectionText);
+      return written && written.err === 0 ? selectionFilePath : "";
+    }
+
     randomMarkerInsertRunButton.addEventListener("click", () => {
       if (randomMarkerDialogMode === "replaceSelectedSources") {
         if (!randomMarkerSelectedFolderIds.size) {
@@ -6266,7 +6290,12 @@
       saveRandomMarkerInsertSettings();
       const sourceSelection = JSON.stringify({ include: Array.from(randomMarkerSelectedFolderIds), exclude: Array.from(randomMarkerExcludedFolderIds) });
       randomMarkerReplaceFolderSelection = sourceSelection;
-      const encodedFolderId = JSON.stringify(encodeURIComponent(sourceSelection));
+      const selectionFilePath = writeRandomMarkerFolderSelectionFile(sourceSelection);
+      if (!selectionFilePath) {
+        setResult("Could not prepare the selected folders for After Effects. Check that SceneKeeper can write to its user data folder, then try again.", "error");
+        return;
+      }
+      const encodedFolderId = JSON.stringify(encodeURIComponent(`FILE:${selectionFilePath}`));
       const encodedSkipNames = JSON.stringify(encodeURIComponent(randomMarkerSkipNames.value));
       const encodedPresetPath = JSON.stringify(encodeURIComponent(
         randomMarkerCreatePrecomps.checked ? randomMarkerTwixtorPresetPath : ""
