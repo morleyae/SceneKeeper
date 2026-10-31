@@ -327,7 +327,7 @@
         scheduleNextCheck(CHECK_INTERVAL_MS);
         return;
       }
-      showUpdateProblem(`SceneKeeper ${release.tag_name} was found. Downloading the update...`);
+      showUpdateProblem(`SceneKeeper ${release.tag_name} was found and is downloading. After the download, close and reopen After Effects to install the update.`);
       const asset = (release.assets || []).find((item) => item.name === `SceneKeeper-${release.tag_name}.zip`);
       if (!asset || !asset.browser_download_url) {
         showUpdateProblem(`SceneKeeper ${release.tag_name} is available, but its download package could not be found. Please contact support.`);
