@@ -6150,10 +6150,10 @@
       }
     });
     function writeRandomMarkerFolderSelectionFile(selectionText) {
-      const cep = window.cep;
-      const fs = cep && cep.fs;
-      if (!cep || typeof cep.getSystemPath !== "function" || !fs || typeof fs.writeFile !== "function") return "";
-      let userDataPath = String(cep.getSystemPath("userData") || "").replace(/^file:\/\//, "");
+      const cepHost = window.__adobe_cep__;
+      const fs = window.cep && window.cep.fs;
+      if (!cepHost || typeof cepHost.getSystemPath !== "function" || !fs || typeof fs.writeFile !== "function") return "";
+      let userDataPath = String(cepHost.getSystemPath("userData") || "").replace(/^file:\/\//, "");
       try { userDataPath = decodeURI(userDataPath); } catch (error) {}
       userDataPath = userDataPath.replace(/\\/g, "/").replace(/\/$/, "");
       if (/^\/[A-Za-z]:\//.test(userDataPath)) userDataPath = userDataPath.substring(1);
