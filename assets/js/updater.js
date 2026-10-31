@@ -37,7 +37,8 @@
       "License checks now allow more time and automatically retry once after a temporary connection or server error.",
       "The SceneKeeper title no longer runs into the header buttons in narrow panels."
     ],
-    "1.0.35": ["License activation now uses CEP’s native HTTPS connection when the embedded panel request cannot reach the license server."]
+    "1.0.35": ["License activation now uses CEP’s native HTTPS connection when the embedded panel request cannot reach the license server."],
+    "1.0.36": ["On macOS, license checks can use the system HTTPS client as a fallback when After Effects’ embedded network connection times out."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");

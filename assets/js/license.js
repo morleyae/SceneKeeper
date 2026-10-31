@@ -225,14 +225,104 @@
     });
   }
 
+  function requestViaMacCurl(path, body) {
+    return new Promise((resolve, reject) => {
+      const cepNode = window.cep_node || (typeof cep_node !== "undefined" ? cep_node : null);
+      if (!cepNode || typeof cepNode.require !== "function") {
+        reject(new Error("CEP Node networking is unavailable."));
+        return;
+      }
+
+      let child;
+      try {
+        const childProcess = cepNode.require("child_process");
+        const marker = "\\nSCENEKeeperHTTPSTATUS:";
+        const args = [
+          "--silent", "--show-error", "--connect-timeout", "15", "--max-time", "25",
+          "--request", "POST", "--header", "Content-Type: application/json",
+          "--data-binary", "@-", "--write-out", `${marker}%{http_code}`,
+          `${apiBaseUrl}${path}`
+        ];
+        child = childProcess.spawn("/usr/bin/curl", args, { stdio: ["pipe", "pipe", "pipe"] });
+      } catch (error) {
+        error.status = 0;
+        reject(error);
+        return;
+      }
+
+      let output = "";
+      let errorOutput = "";
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (chunk) => { output += chunk; });
+      child.stderr.on("data", (chunk) => { errorOutput += chunk; });
+      child.on("error", (error) => {
+        if (typeof error.status !== "number") error.status = 0;
+        reject(error);
+      });
+      child.on("close", (exitCode) => {
+        const markerIndex = output.lastIndexOf("\nSCENEKeeperHTTPSTATUS:");
+        if (markerIndex < 0) {
+          const curlError = new Error(errorOutput.trim() || `macOS curl exited with code ${exitCode}.`);
+          curlError.status = 0;
+          reject(curlError);
+          return;
+        }
+
+        const responseText = output.slice(0, markerIndex).trim();
+        const statusText = output.slice(markerIndex + "\nSCENEKeeperHTTPSTATUS:".length).trim();
+        const status = Number(statusText) || 0;
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (error) {
+          const parseError = new Error("The license server returned an invalid response.");
+          parseError.status = status;
+          reject(parseError);
+          return;
+        }
+        if (status >= 200 && status < 300) {
+          resolve(result);
+          return;
+        }
+        const responseError = new Error(result.error || `License check failed (${status}).`);
+        responseError.status = status;
+        reject(responseError);
+      });
+      child.stdin.end(JSON.stringify(body));
+    });
+  }
+
   async function request(path, body) {
+    const isMac = /Macintosh|Mac OS X/i.test(navigator.userAgent || "");
+    let lastNativeError = null;
+    if (isMac) {
+      try {
+        return await requestViaMacCurl(path, body);
+      } catch (curlError) {
+        if (curlError.status && curlError.status !== 408 && curlError.status !== 429 && curlError.status < 500) {
+          throw curlError;
+        }
+        lastNativeError = curlError;
+      }
+    }
+
     try {
       return await requestViaCepNode(path, body);
     } catch (nativeError) {
       if (nativeError.status && nativeError.status !== 408 && nativeError.status !== 429 && nativeError.status < 500) {
         throw nativeError;
       }
-      return requestViaXhr(path, body);
+      lastNativeError = nativeError;
+    }
+
+    try {
+      return await requestViaXhr(path, body);
+    } catch (xhrError) {
+      if (lastNativeError && lastNativeError.message) {
+        xhrError.message += ` (Native connection: ${lastNativeError.message})`;
+      }
+      throw xhrError;
     }
   }
 
