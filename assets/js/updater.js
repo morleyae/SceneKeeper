@@ -5,6 +5,7 @@
   const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
   const RETRY_INTERVAL_MS = 5 * 60 * 1000;
   const LAST_CHECK_KEY = "scenekeeper.update.lastCheck";
+  const PENDING_UPDATE_KEY = "scenekeeper.update.pendingVersion";
   let checkInFlight = false;
   let scheduledVersion = "";
   let nextCheckTimer = null;
@@ -138,11 +139,17 @@
   }
 
   function showNotice(version) {
-    notice.textContent = `SceneKeeper ${version} wurde heruntergeladen. Schließe After Effects; das Update wird automatisch installiert. Danach AE neu starten, um die neue Version zu verwenden.`;
+    if (!notice) return;
+    notice.textContent = `SceneKeeper ${version} ist bereit. Schließe After Effects, damit das Update installiert wird. Starte AE danach neu. Dieser Hinweis bleibt, bis die neue Version läuft.`;
     notice.hidden = false;
   }
 
   function showUpdateProblem(message) {
+    const pendingVersion = getPendingUpdateVersion();
+    if (pendingVersion && compareVersions(config.currentVersion, pendingVersion) < 0) {
+      showNotice(pendingVersion);
+      return;
+    }
     notice.textContent = message;
     notice.hidden = false;
   }
@@ -165,6 +172,32 @@
   function clearLastCheckTime() {
     try { window.localStorage.removeItem(LAST_CHECK_KEY); }
     catch (error) {}
+  }
+
+  function getPendingUpdateVersion() {
+    try { return String(window.localStorage.getItem(PENDING_UPDATE_KEY) || ""); }
+    catch (error) { return ""; }
+  }
+
+  function setPendingUpdateVersion(version) {
+    try { window.localStorage.setItem(PENDING_UPDATE_KEY, String(version || "")); }
+    catch (error) {}
+  }
+
+  function clearPendingUpdateVersion() {
+    try { window.localStorage.removeItem(PENDING_UPDATE_KEY); }
+    catch (error) {}
+  }
+
+  function restorePendingUpdateNotice() {
+    const pendingVersion = getPendingUpdateVersion();
+    if (!pendingVersion) return;
+    if (compareVersions(config.currentVersion, pendingVersion) >= 0) {
+      clearPendingUpdateVersion();
+      clearNotice();
+      return;
+    }
+    showNotice(pendingVersion);
   }
 
   function scheduleNextCheck(delay) {
@@ -238,6 +271,7 @@
             scheduleNextCheck(RETRY_INTERVAL_MS);
             return;
           }
+          setPendingUpdateVersion(release.tag_name);
           scheduledVersion = release.tag_name;
           showNotice(release.tag_name);
         });
@@ -245,6 +279,7 @@
     });
   }
 
+  restorePendingUpdateNotice();
   if (window.SceneKeeperAppReady) checkForUpdates();
   else window.addEventListener("scenekeeper-app-ready", checkForUpdates, { once: true });
 })();
