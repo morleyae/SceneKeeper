@@ -3,8 +3,11 @@
   const notice = document.getElementById("scene-keeper-update-notice");
   const versionLabel = document.getElementById("scene-keeper-version");
   const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
+  const RETRY_INTERVAL_MS = 5 * 60 * 1000;
   const LAST_CHECK_KEY = "scenekeeper.update.lastCheck";
-  let started = false;
+  let checkInFlight = false;
+  let scheduledVersion = "";
+  let nextCheckTimer = null;
 
   if (versionLabel) {
     const currentVersion = String(config.currentVersion || "").replace(/^v/i, "");
@@ -139,29 +142,104 @@
     notice.hidden = false;
   }
 
+  function showUpdateProblem(message) {
+    notice.textContent = message;
+    notice.hidden = false;
+  }
+
+  function clearNotice() {
+    notice.textContent = "";
+    notice.hidden = true;
+  }
+
+  function getLastCheckTime() {
+    try { return Number(window.localStorage.getItem(LAST_CHECK_KEY)) || 0; }
+    catch (error) { return 0; }
+  }
+
+  function setLastCheckTime() {
+    try { window.localStorage.setItem(LAST_CHECK_KEY, String(Date.now())); }
+    catch (error) {}
+  }
+
+  function clearLastCheckTime() {
+    try { window.localStorage.removeItem(LAST_CHECK_KEY); }
+    catch (error) {}
+  }
+
+  function scheduleNextCheck(delay) {
+    if (nextCheckTimer !== null) window.clearTimeout(nextCheckTimer);
+    nextCheckTimer = window.setTimeout(() => {
+      nextCheckTimer = null;
+      checkForUpdates();
+    }, Math.max(1000, Number(delay) || RETRY_INTERVAL_MS));
+  }
+
   function checkForUpdates() {
-    if (started) return;
-    started = true;
+    if (checkInFlight) return;
     if (!config.repository || !config.currentVersion || !notice) return;
 
-    const lastCheck = Number(window.localStorage.getItem(LAST_CHECK_KEY)) || 0;
-    if (Date.now() - lastCheck < CHECK_INTERVAL_MS) return;
-    window.localStorage.setItem(LAST_CHECK_KEY, String(Date.now()));
+    if (scheduledVersion) {
+      scheduleNextCheck(CHECK_INTERVAL_MS);
+      return;
+    }
 
+    const lastCheck = getLastCheckTime();
+    const waitForNextAllowedCheck = CHECK_INTERVAL_MS - (Date.now() - lastCheck);
+    if (waitForNextAllowedCheck > 0) {
+      scheduleNextCheck(waitForNextAllowedCheck);
+      return;
+    }
+
+    checkInFlight = true;
     requestJson(`https://api.github.com/repos/${config.repository}/releases/latest`, (releaseError, release) => {
-      if (releaseError || !release || release.draft || release.prerelease || compareVersions(release.tag_name, config.currentVersion) <= 0) return;
+      checkInFlight = false;
+      if (releaseError) {
+        showUpdateProblem("Could not check for SceneKeeper updates. The panel will retry automatically.");
+        scheduleNextCheck(RETRY_INTERVAL_MS);
+        return;
+      }
+      setLastCheckTime();
+      if (!release || release.draft || release.prerelease || compareVersions(release.tag_name, config.currentVersion) <= 0) {
+        clearNotice();
+        scheduleNextCheck(CHECK_INTERVAL_MS);
+        return;
+      }
+      showUpdateProblem(`SceneKeeper ${release.tag_name} was found. Downloading the update...`);
       const asset = (release.assets || []).find((item) => item.name === `SceneKeeper-${release.tag_name}.zip`);
-      if (!asset || !asset.browser_download_url) return;
+      if (!asset || !asset.browser_download_url) {
+        showUpdateProblem(`SceneKeeper ${release.tag_name} is available, but its download package could not be found. Please contact support.`);
+        clearLastCheckTime();
+        scheduleNextCheck(RETRY_INTERVAL_MS);
+        return;
+      }
 
       const cep = window.__adobe_cep__;
       const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
       const updateDirectory = `${userData}/SceneKeeper/updates`;
-      if (!userData || !makeDirectory(`${userData}/SceneKeeper`) || !makeDirectory(updateDirectory)) return;
+      if (!userData || !makeDirectory(`${userData}/SceneKeeper`) || !makeDirectory(updateDirectory)) {
+        showUpdateProblem(`SceneKeeper ${release.tag_name} was found, but its temporary update folder could not be prepared.`);
+        clearLastCheckTime();
+        scheduleNextCheck(RETRY_INTERVAL_MS);
+        return;
+      }
       const archivePath = `${updateDirectory}/${asset.name}`;
       downloadFile(asset.browser_download_url, archivePath, (downloadError) => {
-        if (downloadError) return;
+        if (downloadError) {
+          showUpdateProblem(`SceneKeeper ${release.tag_name} was found, but the download failed. It will retry automatically.`);
+          clearLastCheckTime();
+          scheduleNextCheck(RETRY_INTERVAL_MS);
+          return;
+        }
         scheduleInstall(archivePath, release.tag_name, (installError) => {
-          if (!installError) showNotice(release.tag_name);
+          if (installError) {
+            showUpdateProblem(`SceneKeeper ${release.tag_name} was downloaded, but automatic installation could not be started. Close and reopen After Effects to retry.`);
+            clearLastCheckTime();
+            scheduleNextCheck(RETRY_INTERVAL_MS);
+            return;
+          }
+          scheduledVersion = release.tag_name;
+          showNotice(release.tag_name);
         });
       });
     });
