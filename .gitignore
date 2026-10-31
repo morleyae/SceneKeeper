@@ -1,0 +1,9 @@
+.DS_Store
+dist/
+node_modules/
+cloudflare/license-server/.wrangler/
+cloudflare/license-server/.dev.vars
+cloudflare/license-server/.env
+cloudflare/license-server/.env.*
+AudioKeeper/
+EditKeeper/

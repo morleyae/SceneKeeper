@@ -1,0 +1,9 @@
+name = "scenekeeper-license"
+main = "worker.js"
+compatibility_date = "2026-10-13"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "scenekeeper-licenses"
+database_id = "efef9ddd-1ab9-4c3a-a9c5-7b186b36f8af"

@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SceneKeeper</title>
+  <link rel="stylesheet" href="./assets/css/panel.css">
+</head>
+<body>
+  <div id="license-gate" class="license-gate" role="dialog" aria-modal="true" aria-labelledby="license-gate-title" hidden>
+    <div class="license-gate-card">
+      <h2 id="license-gate-title">Activate SceneKeeper</h2>
+      <p id="license-gate-copy">Enter your license key to activate SceneKeeper on this installation.</p>
+      <label for="license-key-input">License key</label>
+      <input id="license-key-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="SK-...">
+      <p class="license-support-note">For support or to move a previously purchased key to a new device, message <strong>morley.ae</strong> on Discord.</p>
+      <p id="license-gate-status" class="license-gate-status" role="status" aria-live="polite"></p>
+      <div class="confirm-actions">
+        <button id="license-cancel-button" class="secondary" type="button" hidden>Close</button>
+        <button id="license-activate-button" type="button">Activate / Verify</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="clip-trash-modal" class="settings-modal panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="clip-trash-title" hidden>
+    <div class="clip-trash-modal-content panel-fullscreen-content">
+      <button id="clip-trash-close" class="settings-close" type="button" aria-label="Close trash">×</button>
+      <h2 id="clip-trash-title">Recently deleted clips</h2>
+      <p class="clip-trash-note">The 10 most recently deleted items are kept here. Each clip counts as one item; a folder and all its contents count as one.</p>
+      <div id="clip-trash-list" class="clip-trash-list" role="list" aria-label="Deleted clips"></div>
+      <div class="confirm-actions clip-trash-actions">
+        <button id="empty-clip-trash-button" class="danger" type="button" disabled>Empty Trash</button>
+        <button id="clip-trash-done" class="secondary" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+  <div id="clip-reorder-modal" class="settings-modal panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="clip-reorder-title" hidden>
+    <div class="clip-reorder-modal-content panel-fullscreen-content">
+      <button id="clip-reorder-close" class="settings-close" type="button" aria-label="Close clip reordering">×</button>
+      <h2 id="clip-reorder-title">Reorder Clips &amp; Folders</h2>
+      <p id="clip-reorder-location" class="clip-trash-note"></p>
+      <div id="clip-reorder-list" class="clip-reorder-list" role="list" aria-label="Clips and folders in this collection"></div>
+      <div class="confirm-actions">
+        <button id="clip-reorder-cancel" class="secondary" type="button">Cancel</button>
+        <button id="clip-reorder-done" class="secondary" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+  <div id="missing-footage-modal" class="settings-modal panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="missing-footage-title" hidden>
+    <div class="help-modal-content missing-footage-content panel-fullscreen-content">
+      <button id="missing-footage-close" class="settings-close" type="button" aria-label="Close missing footage">×</button>
+      <h2 id="missing-footage-title">Missing Footage</h2>
+      <p class="clip-trash-note">Relink each missing source. All clips using the same source update together.</p>
+      <div id="missing-footage-list" class="missing-footage-list" role="list" aria-label="Missing footage sources"></div>
+      <div class="confirm-actions">
+        <button id="missing-footage-done" class="secondary" type="button">Done</button>
+      </div>
+    </div>
+  </div>
+  <div id="clip-trash-confirmation" class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="clip-trash-confirmation-text" hidden>
+    <div class="confirm-box-content">
+      <p id="clip-trash-confirmation-text" class="confirm-copy"></p>
+      <p class="clip-trash-warning">This cannot be undone.</p>
+      <div class="confirm-actions">
+        <button id="cancel-clip-trash-action" class="secondary" type="button">Cancel</button>
+        <button id="confirm-clip-trash-action" class="danger" type="button">Delete permanently</button>
+      </div>
+    </div>
+  </div>
+  <div id="workspace-delete-confirmation" class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="workspace-delete-confirmation-text" hidden>
+    <div class="confirm-box-content">
+      <p id="workspace-delete-confirmation-text" class="confirm-copy"></p>
+      <div class="confirm-actions">
+        <button id="cancel-workspace-delete" class="secondary" type="button">Cancel</button>
+        <button id="confirm-workspace-delete" class="danger" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="help-modal" class="settings-modal panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="help-title" hidden>
+    <div class="help-modal-content panel-fullscreen-content">
+      <button id="help-close" class="settings-close" type="button" aria-label="Close help">×</button>
+      <h2 id="help-title">SceneKeeper Help</h2>
+      <button id="start-guided-tutorial" class="secondary guided-tour-help-button" type="button">Start Guided Tutorial</button>
+      <div class="help-list">
+        <div class="help-group">
+          <div class="help-group-title">Basics</div>
+          <div class="help-items">
+            <div class="help-item"><strong>Save and insert</strong><p>Select a layer in After Effects, then click Save a Selected Clip. Double-click a saved clip to insert it at the playhead; click once to select it.</p></div>
+            <div class="help-item"><strong>Organize</strong><p>Search clips, right-click an empty area to reorder clips or folders, open folders with a double-click, and right-click an item for more actions.</p></div>
+            <div class="help-item"><strong>Missing footage</strong><p>Open Missing Footage to find unavailable sources and relink them. Clips using the same source update together.</p></div>
+          </div>
+        </div>
+
+        <div class="help-group">
+          <div class="help-group-title">Quick actions</div>
+          <div class="help-items">
+            <div class="help-item"><strong>Quick delete</strong><p>Hold Shift and click an item's actions/trash button to delete without the confirmation dialog. It moves to Recently Deleted; it is not permanently erased.</p></div>
+            <div class="help-item"><strong>Undo</strong><p>Use the Undo button to reverse the most recent SceneKeeper or After Effects action.</p></div>
+            <div class="help-item"><strong>Recover and transfer</strong><p>Use the trash button to restore or permanently delete items. The document button imports or exports library data.</p></div>
+          </div>
+        </div>
+
+        <div class="help-group">
+          <div class="help-group-title">Settings and support</div>
+          <div class="help-items">
+            <div class="help-item"><strong>Settings</strong><p>Use the gear button to configure previews and clip-saving/insertion defaults.</p></div>
+            <div class="help-item"><strong>License help / device change</strong><p>Message <strong>morley.ae</strong> on Discord for support or to move a purchased key to a new device.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="guided-tour" class="guided-tour" hidden>
+    <div class="guided-tour-scrim" aria-hidden="true"></div>
+  </div>
+  <div id="guided-tour-card" class="guided-tour-card" role="dialog" aria-modal="true" aria-labelledby="guided-tour-title" aria-describedby="guided-tour-copy" hidden>
+    <div class="guided-tour-topline">
+      <span id="guided-tour-step-label">GETTING STARTED</span>
+      <button id="guided-tour-skip" class="secondary compact" type="button">Skip</button>
+    </div>
+    <h2 id="guided-tour-title">Welcome to SceneKeeper</h2>
+    <p id="guided-tour-copy"></p>
+    <div class="guided-tour-actions">
+      <button id="guided-tour-back" class="secondary" type="button">Back</button>
+      <button id="guided-tour-next" type="button">Start tutorial</button>
+    </div>
+  </div>
+  <div id="guided-tour-pointer" class="guided-tour-pointer" aria-hidden="true" hidden>
+    <span class="guided-tour-click-ring"></span>
+    <svg viewBox="0 0 28 34" focusable="false"><path d="M2 2v25l7-7 5 11 4-2-5-11 11-1z"/></svg>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="settings-modal panel-fullscreen-modal" hidden>
+    <div class="settings-modal-content panel-fullscreen-content">
+      <button id="settings-close" class="settings-close" type="button" aria-label="Close settings">×</button>
+      <h2>Settings</h2>
+      <div class="settings-switch-list">
+        <div class="settings-switch-row license-settings-row">
+          <div class="settings-switch-copy">
+            <strong>SceneKeeper License</strong>
+            <small id="license-settings-status" role="status">Checking license service...</small>
+          </div>
+          <button id="license-manage-button" class="secondary compact" type="button">Manage</button>
+        </div>
+        <div class="settings-workspace-section">
+          <div class="settings-switch-copy">
+            <strong>Workspaces</strong>
+            <small>Save and reopen folders</small>
+          </div>
+          <div class="workspace-save-row">
+            <input id="workspace-name" type="text" aria-label="Workspace name" placeholder="Workspace name" maxlength="48">
+            <button id="workspace-save" class="secondary compact" type="button">Save</button>
+          </div>
+          <div class="workspace-open-row">
+            <select id="workspace-select" aria-label="Saved workspaces">
+              <option value="">No saved workspaces</option>
+            </select>
+            <button id="workspace-open" class="secondary compact" type="button" disabled>Open</button>
+            <button id="workspace-delete" class="secondary compact" type="button" aria-label="Delete selected workspace" data-tooltip="Delete workspace" disabled>
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4h10M6 4V2.5h4V4m2 0-.7 10H4.7L4 4m2.5 2v5m3-5v5"/></svg>
+            </button>
+          </div>
+          <div class="workspace-update-row">
+            <button id="workspace-update" class="secondary compact" type="button" disabled>Save Changes to This Workspace</button>
+          </div>
+        </div>
+        <div class="settings-switch-row license-settings-row">
+          <div class="settings-switch-copy">
+            <strong>Missing Footage</strong>
+            <small>Find unavailable sources and relink their clips.</small>
+          </div>
+          <button id="missing-footage-button" class="secondary compact" type="button">Missing Footage (0)</button>
+        </div>
+        <div class="settings-switch-row settings-preview-size-row">
+          <div class="settings-switch-copy">
+            <strong>Clip preview size</strong>
+            <small>Choose the shape of clip thumbnails</small>
+          </div>
+          <div class="preview-size-options" role="group" aria-label="Clip preview size">
+            <button id="clip-preview-size-square" class="preview-size-option" type="button" aria-pressed="true">1080 × 1080</button>
+            <button id="clip-preview-size-landscape" class="preview-size-option" type="button" aria-pressed="false">1920 × 1080</button>
+            </select>
+          </div>
+        </div>
+        <div class="settings-switch-row save-default-heading">
+          <div class="settings-switch-copy">
+            <strong>Save clip defaults</strong>
+            <small>Choose which properties are checked by default when saving clips</small>
+          </div>
+        </div>
+        <label class="save-default-option"><input id="save-default-position" type="checkbox" checked><span>Save position</span></label>
+        <label class="save-default-option"><input id="save-default-scale" type="checkbox" checked><span>Save scale</span></label>
+        <label class="save-default-option"><input id="save-default-audio" type="checkbox" checked><span>Save layer audio state</span></label>
+        <div class="settings-switch-row">
+          <div class="settings-switch-copy">
+            <strong>Hover preview</strong>
+            <small>Play clips while hovering over their tiles</small>
+          </div>
+          <label class="settings-switch" aria-label="Preview autoplay">
+            <input id="preview-autoplay" type="checkbox" checked>
+            <span class="settings-switch-track" aria-hidden="true"></span>
+            <span class="settings-switch-state" id="preview-autoplay-state">On</span>
+          </label>
+        </div>
+        <div class="settings-switch-row">
+          <div class="settings-switch-copy">
+            <strong>Frame blending</strong>
+            <small>Insert clips with activated frame blending</small>
+          </div>
+          <label class="settings-switch" aria-label="Inserted clip frame blending">
+            <input id="frame-blending-enabled" type="checkbox" checked>
+            <span class="settings-switch-track" aria-hidden="true"></span>
+            <span class="settings-switch-state" id="frame-blending-state">On</span>
+          </label>
+        </div>
+        <div class="settings-switch-row">
+          <div class="settings-switch-copy">
+            <strong>Muted insert</strong>
+            <small>Insert saved clips muted even when the saved clip contains audio</small>
+          </div>
+          <label class="settings-switch" aria-label="Always insert clips muted">
+            <input id="muted-insert-enabled" type="checkbox">
+            <span class="settings-switch-track" aria-hidden="true"></span>
+            <span class="settings-switch-state" id="muted-insert-state">Off</span>
+          </label>
+        </div>
+        <div class="settings-switch-row delete-library-settings-row">
+          <div class="settings-switch-copy">
+            <strong>Delete Library Data</strong>
+            <small>Permanently remove saved clips, collections, trash, and cached previews.</small>
+          </div>
+          <button id="delete-library-open" class="danger compact" type="button">Delete Library</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="delete-library-offer" class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="delete-library-offer-title" hidden>
+    <div class="confirm-box-content delete-library-dialog-content">
+      <p id="delete-library-offer-title" class="confirm-copy">Permanently delete all SceneKeeper library data?</p>
+      <p>This cannot be undone. Export a complete backup first, or continue without one.</p>
+      <div class="confirm-actions delete-library-offer-actions">
+        <button id="delete-library-export" class="secondary" type="button">Export Library</button>
+        <button id="delete-library-continue" class="danger" type="button">Continue without export</button>
+        <button id="delete-library-cancel" class="secondary" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="delete-library-final" class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="delete-library-final-title" hidden>
+    <div class="confirm-box-content delete-library-dialog-content">
+      <p id="delete-library-final-title" class="confirm-copy">This permanently deletes your entire library.</p>
+      <p>Clips, folders, Recently Deleted, and cached preview videos will be removed. This action cannot be undone.</p>
+      <label class="delete-library-confirm-label" for="delete-library-confirm-input">Type DELETE to confirm</label>
+      <input id="delete-library-confirm-input" type="text" autocomplete="off" spellcheck="false">
+      <div class="confirm-actions">
+        <button id="delete-library-final-cancel" class="secondary" type="button">Cancel</button>
+        <button id="delete-library-confirm" class="danger" type="button" disabled>Delete Permanently</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="export-data-confirmation" class="confirm-box panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="export-data-confirmation-text" hidden>
+    <div class="confirm-box-content panel-fullscreen-content export-data-dialog-content">
+      <p id="export-data-confirmation-text" class="confirm-copy">Select footage or folders to export their clips:</p>
+      <div class="export-choice-modes" role="group" aria-label="Export selection type">
+        <button id="export-folder-mode-button" class="secondary compact" type="button" aria-pressed="true">Folders</button>
+        <button id="export-footage-mode-button" class="secondary compact" type="button" aria-pressed="false">Footage</button>
+      </div>
+      <input id="export-choice-search" class="export-choice-search" type="search" aria-label="Search footage" placeholder="Search footage...">
+      <div id="export-footage-choice-list" class="export-footage-choice-list"></div>
+      <div class="confirm-actions export-choice-actions" style="margin-top: 7px;">
+        <button id="export-selected-footage-button" type="button">Export Selected</button>
+        <button id="export-all-data-button" class="secondary" type="button">Export All</button>
+        <button id="cancel-export-data-button" class="secondary export-choice-cancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section favorites-section">
+    <div class="section-heading">
+      <h1>SceneKeeper</h1>
+      <div class="section-heading-actions">
+        <button id="settings-toggle" class="secondary help-toggle gear-toggle" type="button" aria-label="Settings" data-tooltip="Settings" aria-expanded="false">⚙︎</button>
+        <button id="help-toggle" class="secondary help-toggle" type="button" aria-label="Help" data-tooltip="Help">?</button>
+        <button id="clip-trash-toggle" class="secondary help-toggle trash-toggle" type="button" aria-label="Recently deleted items" data-tooltip="Recently deleted">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 4h10M6 4V2.5h4V4m2 0-.7 10H4.7L4 4m2.5 2v5m3-5v5"/></svg>
+        </button>
+        <button id="library-data-toggle" class="secondary help-toggle library-data-toggle" type="button" aria-label="Export or import data" data-tooltip="Import / Export">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3 2.5h6l3 3v8H3zM9 2.5v3h3M5 8.5h5M5 10.5h5M5 12.5h3"/></svg>
+        </button>
+      </div>
+    </div>
+    <p id="result" role="status" aria-live="polite"></p>
+    <div class="search-field">
+      <input class="search-input" id="library-search" type="search" aria-label="Search for folders or clips" placeholder="Search for folders or clips">
+      <button class="search-clear" id="clear-library-search" type="button" aria-label="Clear search" title="Clear search" hidden>×</button>
+    </div>
+    <div class="library-tab-row">
+      <div class="library-tab-strip">
+        <div id="library-tabs" class="library-tabs" role="tablist" aria-label="Explorer tabs"></div>
+      </div>
+      <button id="new-library-tab" class="library-tab-new" type="button" aria-label="Open new explorer tab" data-tooltip="New tab">+</button>
+    </div>
+    <div class="library-toolbar">
+      <nav id="library-breadcrumb" class="library-breadcrumb" aria-label="Library location"></nav>
+      <div class="library-sort-control" id="library-sort-control">
+        <button id="clip-sort-menu-toggle" class="clip-sort-menu-toggle secondary compact" type="button" aria-label="Sort clips" title="Sort clips" aria-haspopup="menu" aria-expanded="false">
+          Sort by <span aria-hidden="true">▾</span>
+        </button>
+        <div id="clip-sort-menu" class="clip-sort-menu" role="menu" aria-label="Sort clips" hidden>
+          <button type="button" role="menuitemradio" data-sort-mode="manual" aria-checked="true"><span>Manual order</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
+          <button type="button" role="menuitemradio" data-sort-mode="inserted" aria-checked="false"><span>Most inserted</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
+          <button type="button" role="menuitemradio" data-sort-mode="leastInserted" aria-checked="false"><span>Least inserted</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
+          <button type="button" role="menuitemradio" data-sort-mode="recent" aria-checked="false"><span>Recently added</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
+          <button type="button" role="menuitemradio" data-sort-mode="random" aria-checked="false"><span>Random order</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
+        </div>
+      </div>
+    </div>
+    <div id="folder-create-row" class="folder-create-row" hidden>
+      <input id="new-folder-name" type="text" aria-label="New folder name" placeholder="Folder name">
+      <button id="create-folder-button" type="button">Create</button>
+    </div>
+    <div id="folder-create-dialog" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="folder-create-dialog-title" hidden>
+      <div class="confirm-box-content rename-dialog-content">
+        <p id="folder-create-dialog-title" class="confirm-copy">Create Folder</p>
+        <input id="folder-create-name" type="text" aria-label="Folder name" placeholder="Folder name">
+        <div class="confirm-actions">
+          <button id="cancel-folder-create-button" class="secondary" type="button">Cancel</button>
+          <button id="confirm-folder-create-button" type="button">Create</button>
+        </div>
+      </div>
+    </div>
+    <div id="favorite-list" class="favorite-results" role="list" aria-label="Collections and saved clips" aria-live="polite"></div>
+    <div class="favorite-preview" id="favorite-preview" hidden>
+      <div class="favorite-preview-heading">
+        <span>Preview</span>
+        <strong id="favorite-preview-name"></strong>
+      </div>
+      <video id="favorite-preview-video" playsinline preload="metadata" muted aria-label="Click preview to play or pause" title="Click to play or pause" hidden></video>
+      <div class="favorite-player-controls" id="favorite-player-controls" hidden>
+        <button class="favorite-play-button" id="favorite-play-button" type="button" aria-label="Play preview" title="Play preview" disabled>
+          <span class="favorite-play-glyph" id="favorite-play-glyph" aria-hidden="true"></span>
+        </button>
+        <div class="favorite-preview-timeline">
+          <input class="favorite-preview-seek" id="favorite-preview-seek" type="range" min="0" max="1000" value="0" aria-label="Seek within clip" disabled>
+          <div class="favorite-preview-times">
+            <span id="favorite-preview-current">00:00</span>
+            <span class="favorite-preview-status" id="favorite-preview-status">Loading</span>
+            <span id="favorite-preview-duration">00:00</span>
+          </div>
+        </div>
+        <button class="favorite-mute-button" id="favorite-mute-button" type="button" disabled>Unmute</button>
+      </div>
+      <p class="favorite-preview-message" id="favorite-preview-message"></p>
+    </div>
+    <div class="library-actions" aria-label="Clip library actions">
+      <button id="undo-action-button" class="secondary compact" type="button" aria-label="Undo" title="Undo" data-tooltip="Undo">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.5 4.5 3.5 7.5l3 3M4 7.5h5.5a3.5 3.5 0 1 1 0 7H7.5"/></svg>
+      </button>
+      <button id="copy-selection-button" class="secondary compact" type="button" aria-label="Copy" title="Copy" data-tooltip="Copy" disabled>
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M5 5V2.5h8.5V11H11M2.5 5H11v8.5H2.5z"/></svg>
+      </button>
+      <button id="paste-selection-button" class="secondary compact" type="button" aria-label="Paste" title="Paste" data-tooltip="Paste" disabled>
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3.5h4m-3-1h2a1 1 0 0 1 1 1v1H6v-1a1 1 0 0 1 1-1ZM4 4.5h-1v10h10v-10h-1M5.5 8h5M5.5 10.5h5M5.5 13h3"/></svg>
+      </button>
+      <button id="create-folder-toggle" class="secondary compact" type="button" aria-label="New Folder" title="New Folder" data-tooltip="New Folder">
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.5 5.5h5l1.7 2H17v8a1 1 0 0 1-1 1H4a1.5 1.5 0 0 1-1.5-1.5zM10 10v4m-2-2h4"/></svg>
+      </button>
+    </div>
+    <button id="insert-favorite-button" type="button" disabled>Insert Selected Clip</button>
+    <div class="clip-action-row">
+      <button id="save-favorite-button" class="secondary" type="button">Save a Selected Clip</button>
+      <button id="quick-save-selected-clips" class="secondary" type="button" title="Save selected footage layers to the open folder">Quick Save</button>
+    </div>
+    <div class="clip-action-row">
+      <button id="replace-selected-clip-open" class="secondary" type="button">Replace Selected Clips</button>
+      <button id="quick-replace-selected-clip" class="secondary" type="button" title="Replace selected clip layers using clips from the same saved folder">Quick Replace</button>
+    </div>
+    <button id="random-marker-insert-open" class="secondary" type="button">Random Clips Between Markers</button>
+    <div id="random-marker-insert-dialog" class="confirm-box panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="random-marker-insert-title" hidden>
+      <div class="confirm-box-content random-marker-dialog-content panel-fullscreen-content">
+        <div class="random-marker-title-row">
+          <h2 id="random-marker-insert-title" class="save-clip-dialog-title">Random clips between markers</h2>
+          <button id="random-marker-insert-help" class="random-marker-help" type="button" data-tooltip="Finds markers in the active composition and inserts one random saved clip between each consecutive pair. Clips are trimmed to fit." aria-label="About inserting random clips between markers">?</button>
+        </div>
+        <div class="random-marker-setting">
+          <span>Clip source · Choose folders</span>
+        </div>
+        <div id="random-marker-custom-folders" class="random-marker-custom-folders">
+          <div class="random-marker-folder-help-row">
+            <button class="random-marker-help" type="button" data-tooltip="Selected folders include their subfolders. Uncheck a subfolder to exclude it." aria-label="About choosing clip folders">?</button>
+          </div>
+          <input id="random-marker-folder-search" class="random-marker-folder-search" type="search" placeholder="Search folders…" aria-label="Search clip folders">
+          <div id="random-marker-folder-tree" class="random-marker-folder-tree" role="group" aria-label="Clip source folders"></div>
+        </div>
+        <div class="random-marker-setting random-marker-skip-setting">
+          <span class="random-marker-label-with-help">Marker names to skip <button class="random-marker-help" type="button" data-tooltip="Type a marker name and press Enter, or choose a suggestion. Skipped markers are removed from the sequence, joining the intervals on either side into one longer interval." aria-label="About skipping markers">?</button></span>
+          <div class="random-marker-skip-field">
+            <div id="random-marker-skip-chips" class="random-marker-skip-chips"></div>
+            <input id="random-marker-skip-entry" type="text" placeholder="Type a marker name…" autocomplete="off" aria-label="Marker name to skip" aria-autocomplete="list" aria-controls="random-marker-name-options">
+            <div id="random-marker-name-options" class="random-marker-name-options" role="listbox" hidden></div>
+          </div>
+          <input id="random-marker-skip-names" type="hidden">
+        </div>
+        <div id="random-marker-skip-suggestions" class="random-marker-skip-suggestions" hidden>
+          <span id="random-marker-skip-suggestion-copy"></span>
+          <button id="random-marker-skip-suggestion-add" class="secondary compact" type="button">Add</button>
+        </div>
+        <div class="random-marker-precomp-settings">
+          <div class="random-marker-precomp-toggle-row">
+            <label class="save-clip-option random-marker-precomp-toggle">
+              <input id="random-marker-create-precomps" type="checkbox" checked>
+              <span>Create a precomp for each clip</span>
+            </label>
+            <button class="random-marker-help" type="button" data-tooltip="Creates a separate After Effects precomp for every inserted clip." aria-label="About creating precomps">?</button>
+          </div>
+          <div id="random-marker-preset-picker" class="random-marker-preset-picker" hidden>
+            <label class="random-marker-label-with-help">Twixtor preset (.ffx) <button class="random-marker-help" type="button" data-tooltip="Applies this preset to every created precomp and fits its keyframes to the clip duration." aria-label="About the Twixtor preset">?</button></label>
+            <select id="random-marker-preset-recent" aria-label="Recent Twixtor presets"></select>
+            <div class="random-marker-preset-row">
+              <span id="random-marker-preset-name">No preset selected</span>
+              <button id="random-marker-preset-choose" class="secondary compact" type="button">Choose…</button>
+              <button id="random-marker-preset-clear" class="secondary compact" type="button" aria-label="Clear Twixtor preset" title="Clear preset">×</button>
+            </div>
+          </div>
+        </div>
+        <div class="confirm-actions random-marker-actions">
+          <button id="random-marker-replace-current-folder" class="secondary" type="button" hidden>Replace from current folder</button>
+          <button id="random-marker-insert-run" type="button">Insert Between Markers</button>
+          <button id="random-marker-insert-cancel" class="secondary" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div id="random-marker-replace-dialog" class="confirm-box panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="random-marker-replace-title" hidden>
+      <div class="confirm-box-content random-marker-dialog-content panel-fullscreen-content">
+        <div class="random-marker-title-row">
+          <h2 id="random-marker-replace-title" class="save-clip-dialog-title">Replace inserted clips</h2>
+          <button class="random-marker-help" type="button" data-tooltip="Select clips here or select their layers in the After Effects timeline, then replace them using clips from the chosen folders." aria-label="About replacing inserted clips">?</button>
+        </div>
+        <div id="random-marker-replace-list" class="random-marker-replace-list"></div>
+        <div class="confirm-actions random-marker-actions">
+          <button id="random-marker-replace-selected" type="button">Replace selected</button>
+          <button id="random-marker-replace-choose-clip" class="secondary" type="button" disabled>Choose source folders</button>
+          <button id="random-marker-delete-selected-precomps" class="secondary danger" type="button" hidden disabled>Delete selected precomps</button>
+          <button id="random-marker-replace-done" class="secondary" type="button">Done</button>
+        </div>
+      </div>
+    </div>
+    <div id="random-marker-delete-confirmation" class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="random-marker-delete-confirmation-title" hidden>
+      <div class="confirm-box-content">
+        <div class="random-marker-title-row">
+          <h2 id="random-marker-delete-confirmation-title" class="save-clip-dialog-title">Delete selected precomps?</h2>
+          <button class="random-marker-help" type="button" data-tooltip="The selected precomps and their layers will be removed. Footage is deleted only if no other composition uses it." aria-label="What will be deleted">?</button>
+        </div>
+        <div class="confirm-actions">
+          <button id="random-marker-delete-confirmation-cancel" class="secondary" type="button">Cancel</button>
+          <button id="random-marker-delete-confirmation-confirm" class="danger" type="button">Delete precomps</button>
+        </div>
+      </div>
+    </div>
+    <div id="replace-selected-next-dialog" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="replace-selected-next-title" hidden>
+      <div class="confirm-box-content">
+        <h2 id="replace-selected-next-title" class="save-clip-dialog-title">Clip replaced</h2>
+        <div class="confirm-actions">
+          <button id="replace-selected-again" type="button">Replace again</button>
+          <button id="replace-selected-change-folders" class="secondary" type="button">Change folders</button>
+          <button id="replace-selected-next-done" class="secondary" type="button">Done</button>
+        </div>
+      </div>
+    </div>
+    <div id="error-dialog" class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="error-dialog-title" aria-describedby="error-dialog-details" hidden>
+      <div class="confirm-box-content error-dialog-content">
+        <h2 id="error-dialog-title" class="confirm-copy">Error</h2>
+        <pre id="error-dialog-details" class="error-dialog-details"></pre>
+        <div class="confirm-actions">
+          <button id="error-dialog-ok-button" type="button">OK</button>
+        </div>
+      </div>
+    </div>
+    <div id="save-clip-dialog" class="confirm-box panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="save-clip-dialog-title" hidden>
+      <div class="confirm-box-content panel-fullscreen-content save-clip-dialog-content">
+        <h2 id="save-clip-dialog-title" class="save-clip-dialog-title">Where should this clip be saved?</h2>
+        <div class="save-clip-current-location">
+          <small>Select a folder below or expand it to browse subfolders.</small>
+        </div>
+        <div class="save-clip-toolbar">
+          <nav id="save-clip-breadcrumb" class="save-clip-breadcrumb" aria-label="Save destination"></nav>
+          <button id="save-clip-new-folder-button" class="secondary compact" type="button">New Folder</button>
+        </div>
+        <input id="save-clip-folder-search" class="save-clip-folder-search" type="search" aria-label="Find a folder" placeholder="Find a folder…">
+        <div id="save-clip-folder-list" class="save-clip-folder-list" role="list" aria-label="Folders"></div>
+          <details class="save-clip-options-details">
+            <summary>Save options</summary>
+            <div class="save-clip-options" role="group" aria-label="Layer properties to save">
+            <label class="save-clip-name-field" for="save-clip-name">
+              Clip name (optional)
+              <input id="save-clip-name" type="text" placeholder="Clip 1" maxlength="120">
+            </label>
+            <label class="save-clip-option"><input id="save-clip-position" type="checkbox" checked><span>Save position</span></label>
+            <label class="save-clip-option"><input id="save-clip-scale" type="checkbox" checked><span>Save scale</span></label>
+            <label class="save-clip-option"><input id="save-clip-audio" type="checkbox" checked><span>Save layer audio on/off state</span></label>
+            </div>
+          </details>
+        <div class="confirm-actions save-clip-actions">
+          <button id="save-clip-current-location-button" type="button">Save in "Home"</button>
+          <button id="save-clip-scene-location-button" class="secondary" type="button" hidden>Quick save in "Folder"</button>
+          <button id="cancel-save-clip-button" class="secondary" type="button">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div id="long-clip-confirmation" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="long-clip-confirmation-text" hidden>
+      <div class="confirm-box-content">
+        <p id="long-clip-confirmation-text" class="confirm-copy"></p>
+        <div class="confirm-actions">
+          <button id="shorten-long-clip-button" class="secondary" type="button">I'll shorten it in After Effects</button>
+          <button id="save-long-clip-button" type="button">Save full clip</button>
+        </div>
+      </div>
+    </div>
+    <div id="replace-clip-confirmation" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="replace-clip-confirmation-text" hidden>
+      <div class="confirm-box-content">
+        <p id="replace-clip-confirmation-text" class="confirm-copy">A clip with the same footage and timestamps already exists. Replace its saved settings?</p>
+        <div class="confirm-actions">
+          <button id="cancel-clip-replacement-button" class="secondary" type="button">Cancel</button>
+          <button id="confirm-clip-replacement-button" type="button">Replace Clip</button>
+        </div>
+      </div>
+    </div>
+    <div class="favorite-tools-row">
+      <!-- Export and Import moved to Settings modal -->
+    </div>
+    <div id="import-folder-conflict" class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="import-folder-conflict-title" hidden>
+      <div class="confirm-box-content import-folder-conflict-content">
+        <p id="import-folder-conflict-title" class="confirm-copy">A folder with this name already exists.</p>
+        <p id="import-folder-conflict-copy" class="confirm-copy"></p>
+        <div class="confirm-actions import-folder-conflict-actions">
+          <button id="import-folder-conflict-replace" class="danger" type="button">Replace</button>
+          <button id="import-folder-conflict-keep" class="secondary" type="button">Keep Both</button>
+          <button id="import-folder-conflict-cancel" class="secondary" type="button">Cancel Import</button>
+        </div>
+      </div>
+    </div>
+    <div id="delete-confirmation" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="delete-confirmation-text" hidden>
+      <div class="confirm-box-content">
+        <p id="delete-confirmation-text" class="confirm-copy">Delete this clip?</p>
+        <div class="confirm-actions">
+          <button id="cancel-delete-button" class="secondary" type="button">Cancel</button>
+          <button id="confirm-delete-button" class="danger" type="button">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="rename-dialog" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="rename-dialog-title" hidden>
+      <div class="confirm-box-content rename-dialog-content">
+        <p id="rename-dialog-title" class="confirm-copy">Rename</p>
+        <input id="rename-dialog-input" type="text" aria-label="New name">
+        <div class="confirm-actions">
+          <button id="cancel-rename-button" class="secondary" type="button">Cancel</button>
+          <button id="confirm-rename-button" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+    <div id="clip-edit-dialog" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="clip-edit-dialog-title" hidden>
+      <div class="confirm-box-content clip-edit-dialog-content">
+        <p id="clip-edit-dialog-title" class="confirm-copy">Edit Clip</p>
+        <div class="clip-edit-field clip-edit-audio-field">
+          <span>Layer audio</span>
+          <label class="settings-switch clip-audio-switch">
+            <input id="clip-edit-audio-toggle" type="checkbox">
+            <span class="settings-switch-track" aria-hidden="true"></span>
+            <span id="clip-edit-audio-state" class="settings-switch-state">Off</span>
+          </label>
+        </div>
+        <div class="clip-edit-grid">
+          <label class="clip-edit-field clip-edit-name-field"><span>Name</span><input id="clip-edit-name" type="text" required></label>
+          <label class="clip-edit-field"><span>In (seconds)</span><input id="clip-edit-in" type="number" min="0" step="0.1" required></label>
+          <label class="clip-edit-field"><span>Out (seconds)</span><input id="clip-edit-out" type="number" min="0" step="0.1" required></label>
+          <label class="clip-edit-field"><span>Position X</span><input id="clip-edit-position-x" type="number" step="0.1"></label>
+          <label class="clip-edit-field"><span>Position Y</span><input id="clip-edit-position-y" type="number" step="0.1"></label>
+          <div class="clip-edit-scale-row">
+            <label class="clip-edit-field"><span>Scale X (%)</span><input id="clip-edit-scale-x" type="number" step="0.1"></label>
+            <label class="clip-edit-field"><span>Scale Y (%)</span><input id="clip-edit-scale-y" type="number" step="0.1"></label>
+            <button id="clip-edit-scale-link" class="secondary clip-edit-scale-link" type="button" aria-pressed="true" aria-label="Unlink scale values" title="Scale values are linked">
+              <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.2 9.8 9.8 6.2m-5 5H3.5a2.5 2.5 0 0 1 0-5h2m5 0h1a2.5 2.5 0 0 1 0 5h-2"/></svg>
+            </button>
+          </div>
+        </div>
+        <p id="clip-edit-error" class="clip-edit-error" role="alert" hidden></p>
+        <div class="confirm-actions clip-edit-actions">
+          <button id="cancel-clip-edit-button" class="secondary" type="button">Cancel</button>
+          <button id="confirm-clip-edit-button" type="button">Save Changes</button>
+        </div>
+      </div>
+    </div>
+    <div id="library-context-menu" class="library-context-menu" role="menu" hidden></div>
+
+    <div id="import-success-confirmation" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="import-success-confirmation-text" hidden>
+      <div class="confirm-box-content">
+        <p id="import-success-confirmation-text" class="confirm-copy">Data imported successfully.</p>
+        <div class="confirm-actions">
+          <button id="import-success-ok-button" type="button">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-tooltip" class="panel-tooltip" role="tooltip" aria-hidden="true" hidden></div>
+  <button id="panel-fullscreen-close" class="panel-fullscreen-close" type="button" aria-label="Close current page" hidden>×</button>
+  <div id="action-notification" class="action-notification" role="status" aria-live="polite" hidden></div>
+  <div id="scene-keeper-update-notice" class="scene-keeper-update-notice" role="status" aria-live="polite" hidden></div>
+  <footer class="panel-credit">by morley.ae</footer>
+
+  <script src="./assets/js/license-config.js"></script>
+  <script src="./assets/js/license.js"></script>
+  <script src="./assets/js/update-config.js"></script>
+  <script src="./assets/js/updater.js"></script>
+  <script src="./assets/js/panel.js"></script>
+</body>
+</html>
