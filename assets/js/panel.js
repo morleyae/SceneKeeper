@@ -399,10 +399,14 @@
       });
     }
 
-    function showActionNotification(message) {
+    function showActionNotification(message, tone) {
+      if (!actionNotification) return;
       if (actionNotificationTimer) clearTimeout(actionNotificationTimer);
       if (actionNotificationHideTimer) clearTimeout(actionNotificationHideTimer);
       actionNotification.textContent = message;
+      actionNotification.classList.toggle("is-error", tone === "error");
+      actionNotification.classList.toggle("is-success", tone === "success");
+      actionNotification.classList.toggle("is-warning", tone === "warning");
       actionNotification.hidden = false;
       actionNotification.classList.remove("is-visible");
       void actionNotification.offsetWidth;
@@ -411,10 +415,11 @@
         actionNotification.classList.remove("is-visible");
         actionNotificationHideTimer = window.setTimeout(() => {
           actionNotification.hidden = true;
+          actionNotification.classList.remove("is-error", "is-success", "is-warning");
           actionNotificationHideTimer = null;
         }, 160);
         actionNotificationTimer = null;
-      }, 2800);
+      }, tone === "error" ? 5000 : 3000);
     }
 
     document.addEventListener("pointerover", (event) => {
@@ -508,18 +513,16 @@
         clearTimeout(resultClearTimer);
         resultClearTimer = null;
       }
-      if (tone === "error") {
-        errorDialogDetails.textContent = message || "An unexpected error occurred.";
-        if (errorDialog.hidden) errorDialogReturnFocus = document.activeElement;
-        errorDialog.hidden = false;
-        errorDialogOkButton.focus();
+      const displayMessage = message === "BACKUP_SAVED" ? "Backup saved." : (message || "");
+      if (tone === "error" || tone === "success" || tone === "warning") {
         result.textContent = "";
         result.className = "";
+        showActionNotification(displayMessage || (tone === "error" ? "An unexpected error occurred." : ""), tone);
         return;
       }
-      result.textContent = message || "";
-      result.className = tone === "success" ? "success" : (tone === "warning" ? "warning" : "");
-      if (message) {
+      result.textContent = displayMessage;
+      result.className = "";
+      if (displayMessage) {
         resultClearTimer = setTimeout(() => {
           result.textContent = "";
           result.className = "";

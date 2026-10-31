@@ -114,6 +114,43 @@
     .scene-keeper-update-notice button:disabled { opacity: .65; cursor: wait; }
     .scene-keeper-update-notice[hidden] { display: none; }
 
+    .action-notification {
+      position: fixed;
+      z-index: 7000;
+      top: 8px;
+      left: 50%;
+      width: max-content;
+      max-width: calc(100% - 24px);
+      max-height: 35vh;
+      overflow: auto;
+      padding: 9px 13px;
+      border: 1px solid #555;
+      border-left: 3px solid var(--accent);
+      border-radius: 5px;
+      background: #303030;
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.4;
+      text-align: center;
+      white-space: pre-line;
+      overflow-wrap: anywhere;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, .4);
+      opacity: 0;
+      transform: translate(-50%, calc(-100% - 12px));
+      transition: opacity 160ms ease, transform 180ms ease;
+      pointer-events: auto;
+    }
+
+    .action-notification.is-visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .action-notification.is-error { border-left-color: var(--danger); }
+    .action-notification.is-success { border-left-color: #79bd8b; }
+    .action-notification.is-warning { border-left-color: #e8bb66; }
+    .action-notification[hidden] { display: none; }
+
     .topbar {
       display: flex;
       align-items: center;
