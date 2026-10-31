@@ -123,7 +123,7 @@
     return deviceId;
   }
 
-  function request(path, body) {
+  function requestViaXhr(path, body) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", `${apiBaseUrl}${path}`, true);
@@ -159,6 +159,81 @@
       };
       xhr.send(JSON.stringify(body));
     });
+  }
+
+  function requestViaCepNode(path, body) {
+    return new Promise((resolve, reject) => {
+      const cepNode = window.cep_node || (typeof cep_node !== "undefined" ? cep_node : null);
+      if (!cepNode || typeof cepNode.require !== "function") {
+        reject(new Error("CEP Node networking is unavailable."));
+        return;
+      }
+
+      try {
+        const https = cepNode.require("https");
+        const Buffer = cepNode.require("buffer").Buffer;
+        const endpoint = new URL(`${apiBaseUrl}${path}`);
+        const payload = JSON.stringify(body);
+        const requestOptions = {
+          hostname: endpoint.hostname,
+          port: endpoint.port || 443,
+          path: `${endpoint.pathname}${endpoint.search}`,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Content-Length": Buffer.byteLength(payload)
+          }
+        };
+        const nativeRequest = https.request(requestOptions, (response) => {
+          let responseText = "";
+          response.setEncoding("utf8");
+          response.on("data", (chunk) => { responseText += chunk; });
+          response.on("end", () => {
+            let result;
+            try {
+              result = JSON.parse(responseText);
+            } catch (error) {
+              const parseError = new Error("The license server returned an invalid response.");
+              parseError.status = response.statusCode || 0;
+              reject(parseError);
+              return;
+            }
+            if (response.statusCode >= 200 && response.statusCode < 300) {
+              resolve(result);
+              return;
+            }
+            const responseError = new Error(result.error || `License check failed (${response.statusCode}).`);
+            responseError.status = response.statusCode || 0;
+            reject(responseError);
+          });
+        });
+        nativeRequest.setTimeout(25000, () => {
+          const timeoutError = new Error("The license server did not respond in time.");
+          timeoutError.status = 0;
+          nativeRequest.destroy(timeoutError);
+        });
+        nativeRequest.on("error", (error) => {
+          if (typeof error.status !== "number") error.status = 0;
+          reject(error);
+        });
+        nativeRequest.write(payload);
+        nativeRequest.end();
+      } catch (error) {
+        if (typeof error.status !== "number") error.status = 0;
+        reject(error);
+      }
+    });
+  }
+
+  async function request(path, body) {
+    try {
+      return await requestViaCepNode(path, body);
+    } catch (nativeError) {
+      if (nativeError.status && nativeError.status !== 408 && nativeError.status !== 429 && nativeError.status < 500) {
+        throw nativeError;
+      }
+      return requestViaXhr(path, body);
+    }
   }
 
   async function requestWithRetry(path, body, onRetry) {
