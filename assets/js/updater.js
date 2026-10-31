@@ -119,7 +119,7 @@
 
     let launched;
     if (isWindows) {
-      const command = `-NoProfile -ExecutionPolicy Bypass -File "${helperPath}" "${statePath}"`;
+      const command = `-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "${helperPath}" "${statePath}"`;
       launched = processApi.createProcess("powershell.exe", command);
     } else {
       launched = processApi.createProcess("/bin/bash", helperPath, statePath);

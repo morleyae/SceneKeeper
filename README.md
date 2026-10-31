@@ -14,7 +14,7 @@ Die Installationsdatei muss im entpackten Ordner `SceneKeeper` neben `CSXS` lieg
 
 ### Releases veröffentlichen
 
-SceneKeeper-Releases werden über GitHub Actions gebaut. Erhöhe für eine Veröffentlichung die Versionsnummern in `CSXS/manifest.xml`, committe die Änderung und erstelle anschließend einen Tag wie `v1.0.1`. Push den Commit und den Tag; die Action erstellt `SceneKeeper-v1.0.1.zip` und veröffentlicht ihn als GitHub Release. Die ZIP enthält nur SceneKeeper-Dateien sowie beide Installer.
+SceneKeeper-Releases werden über GitHub Actions gebaut. Committe die Änderungen und erstelle anschließend einen Tag wie `v1.0.1`. Push den Commit und den Tag; die Action setzt die Manifest-Version aus dem Tag, erstellt `SceneKeeper-v1.0.1.zip` und veröffentlicht ihn als GitHub Release. Die ZIP enthält nur SceneKeeper-Dateien sowie beide Installer. Installierte Panels prüfen automatisch auf eine neuere Veröffentlichung, laden sie herunter und installieren sie nach dem Beenden von After Effects. Danach muss AE neu gestartet werden.
 
 ```sh
 git tag v1.0.1
