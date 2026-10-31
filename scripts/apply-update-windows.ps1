@@ -11,11 +11,10 @@ $target = $stateLines[1]
 $version = $stateLines[2]
 if (-not (Test-Path -LiteralPath $archive)) { exit 2 }
 
-# Wait until After Effects releases the extension files.
-while (Get-Process -Name AfterFX -ErrorAction SilentlyContinue) {
-  Start-Sleep -Seconds 2
-}
-
+# Like the macOS updater, install the extension while After Effects remains
+# open. After Effects will keep the currently loaded panel in memory; a restart
+# loads the newly installed files. If Windows has a file locked, the error
+# dialog tells the user to close AE and retry.
 try {
   $work = Join-Path $env:TEMP ([Guid]::NewGuid().ToString("N"))
   $payload = Join-Path $work "SceneKeeper"
@@ -42,7 +41,7 @@ try {
     Add-Content -LiteralPath $logPath -Value "SceneKeeper update failed: $failureMessage"
     try {
       Add-Type -AssemblyName PresentationFramework
-      [System.Windows.MessageBox]::Show("SceneKeeper $version could not be installed. Check that After Effects is closed and that your Windows account can modify:`n$target`n`nDetails: $failureMessage`n`nLog: $logPath", "SceneKeeper update failed") | Out-Null
+      [System.Windows.MessageBox]::Show("SceneKeeper $version could not be installed. If After Effects is open, close it and retry. Also check that your Windows account can modify:`n$target`n`nDetails: $failureMessage`n`nLog: $logPath", "SceneKeeper update failed") | Out-Null
     } catch {}
     throw
   } finally {

@@ -268,9 +268,29 @@ function sceneCreateBackupInDataFolder(dataFolder, snapshot) {
     return "BACKUP_SAVED";
 }
 
-function createSceneKeeperBackup() {
+function sceneHasRecentBackup(dataFolder) {
+    if (!dataFolder) return false;
+    var folder = new Folder(dataFolder.fsName + "/SceneKeeper Backups");
+    if (!folder.exists) return false;
+    var backups = folder.getFiles("SceneKeeper-*.json") || [];
+    var newestTime = 0;
+    for (var i = 0; i < backups.length; i++) {
+        var backup = backups[i];
+        var backupTime = backup.modified ? backup.modified.getTime() : 0;
+        if (!backupTime) {
+            var match = backup.name.match(/^SceneKeeper-(\d+)\.json$/);
+            if (match) backupTime = Number(match[1]);
+        }
+        if (backupTime > newestTime) newestTime = backupTime;
+    }
+    var age = (new Date()).getTime() - newestTime;
+    return newestTime > 0 && age >= 0 && age < 10 * 60 * 1000;
+}
+
+function createSceneKeeperBackup(skipIfRecent) {
     var dataFolder = getSceneKeeperDataFolder();
     if (!dataFolder) return "ERROR: Could not access SceneKeeper storage. " + sceneKeeperDataFolderError;
+    if (skipIfRecent && sceneHasRecentBackup(dataFolder)) return "BACKUP_RECENT";
     var snapshot = {
         version: 1,
         createdAt: String(new Date()),

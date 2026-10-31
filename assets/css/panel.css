@@ -695,6 +695,19 @@
       font-size: 14px;
       font-weight: 700;
     }
+    .settings-modal-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 0 0 10px;
+    }
+    .settings-modal-heading h2 { margin: 0; }
+    .settings-modal-heading .settings-close {
+      position: static;
+      flex: 0 0 28px;
+      display: grid;
+    }
     .settings-actions {
       display: flex;
       gap: 6px;
@@ -2599,6 +2612,9 @@
     }
     .panel-fullscreen-modal > .panel-fullscreen-content { padding-top: 48px; }
     .panel-fullscreen-modal .settings-close { display: none; }
+    #settings-modal:not([hidden]) ~ #panel-fullscreen-close { display: none; }
+    #settings-modal.panel-fullscreen-modal > .settings-modal-content { padding-top: 14px; }
+    #settings-modal .settings-modal-heading .settings-close { display: grid; }
     .panel-fullscreen-close {
       position: fixed;
       top: 8px;

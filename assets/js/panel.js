@@ -6949,7 +6949,7 @@
 
     refreshFavorites(false);
     refreshFavoriteFolders();
-    callAE("createSceneKeeperBackup()", "");
+    callAE("createSceneKeeperBackup(true)", "");
     window.setInterval(() => {
       callAE("createSceneKeeperBackup()", "");
     }, 60 * 60 * 1000);

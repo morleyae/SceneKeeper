@@ -21,7 +21,12 @@
     "1.0.23": ["Improved the macOS updater so it can keep running while After Effects closes."],
     "1.0.24": ["On macOS, updates can install while After Effects is open; restart AE afterward to load them."],
     "1.0.25": ["Linked the version number to GitHub releases and the creator name to TikTok."],
-    "1.0.26": ["Added this plain-language update summary after installing a new version."]
+    "1.0.26": ["Added this plain-language update summary after installing a new version."],
+    "1.0.27": ["The Settings heading now stays at the top, with the close button out of its way."],
+    "1.0.28": [
+      "Windows can now install updates while After Effects stays open, like macOS.",
+      "Restarting the extension no longer creates another backup if one was saved in the last 10 minutes."
+    ]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -188,8 +193,8 @@
 
   function showNotice(version) {
     if (!notice) return;
-    if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is ready. Close After Effects to let the update install, then reopen AE.`;
-    else notice.textContent = `SceneKeeper ${version} is ready. Close After Effects to let the update install, then reopen AE.`;
+    if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs; restart After Effects after the installation confirmation.`;
+    else notice.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs; restart After Effects after the installation confirmation.`;
     if (retryUpdateButton) {
       retryUpdateButton.hidden = false;
       retryUpdateButton.disabled = false;
@@ -200,11 +205,8 @@
 
   function showInstallerStarted(version) {
     showNotice(version);
-    const isWindows = /win/i.test(navigator.platform || navigator.userAgent);
     if (noticeMessage) {
-      noticeMessage.textContent = isWindows
-        ? `Installer started for ${version}. Close After Effects and wait for the installation confirmation before reopening AE.`
-        : `Installing ${version} while After Effects stays open. Restart AE after the installation confirmation appears.`;
+      noticeMessage.textContent = `Installing ${version} while After Effects stays open. Restart AE after the installation confirmation appears.`;
     }
     if (retryUpdateButton) {
       retryUpdateButton.disabled = true;
@@ -332,9 +334,10 @@
       notes = [
         "Backups and Random Clips Between Markers now work on more After Effects setups.",
         "Update progress, restart instructions, and installation errors are clearer.",
-        "On macOS, updates can install while After Effects stays open; restart AE afterward.",
+        "Updates can install while After Effects stays open; restart AE afterward.",
         "Success and error messages slide in briefly, and the clip action buttons take up less space.",
         "The footer links to GitHub releases and the creator’s TikTok profile.",
+        "Restarting the extension avoids creating another backup within 10 minutes.",
         "This short What’s New summary appears after an update."
       ];
     }
@@ -426,7 +429,7 @@
         scheduleNextCheck(CHECK_INTERVAL_MS);
         return;
       }
-      showUpdateProblem(`SceneKeeper ${release.tag_name} was found and is downloading. After the download, close and reopen After Effects to install the update.`);
+      showUpdateProblem(`SceneKeeper ${release.tag_name} was found and is downloading. It will install in the background; restart After Effects after the installation confirmation.`);
       const asset = (release.assets || []).find((item) => item.name === `SceneKeeper-${release.tag_name}.zip`);
       if (!asset || !asset.browser_download_url) {
         showUpdateProblem(`SceneKeeper ${release.tag_name} is available, but its download package could not be found. Please contact support.`);
