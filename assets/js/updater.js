@@ -1,6 +1,8 @@
 (function () {
   const config = window.SceneKeeperUpdateConfig || {};
   const notice = document.getElementById("scene-keeper-update-notice");
+  const noticeMessage = document.getElementById("scene-keeper-update-message");
+  const retryUpdateButton = document.getElementById("scene-keeper-retry-update");
   const versionLabel = document.getElementById("scene-keeper-version");
   const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
   const RETRY_INTERVAL_MS = 5 * 60 * 1000;
@@ -166,8 +168,23 @@
 
   function showNotice(version) {
     if (!notice) return;
-    notice.textContent = `SceneKeeper ${version} ist bereit. Schließe After Effects, damit das Update installiert wird. Starte AE danach neu. Dieser Hinweis bleibt, bis die neue Version läuft.`;
+    if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is ready. Close After Effects to let the update install, then reopen AE.`;
+    else notice.textContent = `SceneKeeper ${version} is ready. Close After Effects to let the update install, then reopen AE.`;
+    if (retryUpdateButton) {
+      retryUpdateButton.hidden = false;
+      retryUpdateButton.disabled = false;
+      retryUpdateButton.textContent = "Retry Update Install";
+    }
     notice.hidden = false;
+  }
+
+  function showInstallerStarted(version) {
+    showNotice(version);
+    if (noticeMessage) noticeMessage.textContent = `Installer started for ${version}. Close After Effects to let it finish, then reopen AE.`;
+    if (retryUpdateButton) {
+      retryUpdateButton.disabled = true;
+      retryUpdateButton.textContent = "Installer Running";
+    }
   }
 
   function showUpdateProblem(message) {
@@ -181,8 +198,47 @@
   }
 
   function clearNotice() {
-    notice.textContent = "";
+    if (noticeMessage) noticeMessage.textContent = "";
+    else notice.textContent = "";
+    if (retryUpdateButton) retryUpdateButton.hidden = true;
     notice.hidden = true;
+  }
+
+  function retryPendingInstallation() {
+    const version = getPendingUpdateVersion() || scheduledVersion;
+    if (!version || compareVersions(config.currentVersion, version) >= 0) return;
+    const cep = window.__adobe_cep__;
+    const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
+    const archivePath = `${userData}/SceneKeeper/updates/SceneKeeper-${version}.zip`;
+    const fs = window.cep && window.cep.fs;
+    const archiveStat = fs && fs.stat ? fs.stat(archivePath) : null;
+    if (!archiveStat || archiveStat.err !== 0) {
+      clearPendingUpdateVersion();
+      scheduledVersion = "";
+      clearLastCheckTime();
+      if (retryUpdateButton) retryUpdateButton.disabled = true;
+      if (noticeMessage) noticeMessage.textContent = `The ${version} update package is missing. Checking GitHub again...`;
+      checkForUpdates(true);
+      return;
+    }
+
+    if (retryUpdateButton) {
+      retryUpdateButton.disabled = true;
+      retryUpdateButton.textContent = "Starting installer...";
+    }
+    scheduleInstall(archivePath, version, (installError) => {
+      if (installError) {
+        if (noticeMessage) noticeMessage.textContent = `Could not start the installer: ${installError.message}. Close After Effects and retry.`;
+        if (retryUpdateButton) {
+          retryUpdateButton.disabled = false;
+          retryUpdateButton.textContent = "Retry Update Install";
+        }
+        return;
+      }
+      setPendingUpdateVersion(version);
+      scheduledVersion = version;
+      showInstallerStarted(version);
+    });
   }
 
   function getLastCheckTime() {
@@ -306,13 +362,14 @@
           }
           setPendingUpdateVersion(release.tag_name);
           scheduledVersion = release.tag_name;
-          showNotice(release.tag_name);
+          showInstallerStarted(release.tag_name);
         });
       });
     });
   }
 
   restorePendingUpdateNotice();
+  if (retryUpdateButton) retryUpdateButton.addEventListener("click", retryPendingInstallation);
   if (window.SceneKeeperAppReady) checkForUpdates(true);
   else window.addEventListener("scenekeeper-app-ready", () => checkForUpdates(true), { once: true });
 })();

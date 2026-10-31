@@ -83,6 +83,11 @@
       top: 0;
       right: 0;
       left: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px 12px;
       padding: 10px 14px;
       border-bottom: 2px solid var(--accent);
       background: #292929;
@@ -93,6 +98,20 @@
       box-shadow: 0 3px 14px rgba(0, 0, 0, .4);
     }
 
+    .scene-keeper-update-notice button {
+      flex: 0 0 auto;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      background: var(--accent);
+      color: #111;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .scene-keeper-update-notice button:disabled { opacity: .65; cursor: wait; }
     .scene-keeper-update-notice[hidden] { display: none; }
 
     .topbar {
