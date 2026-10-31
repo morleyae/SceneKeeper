@@ -25,9 +25,9 @@ if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
 if errorlevel 1 goto :folder_failed
 
 set "COPY_LOG=%TEMP%\SceneKeeper-install-copy.log"
-robocopy "%SOURCE_DIR%." "%TARGET_DIR%" /E /R:2 /W:1 /COPY:DAT /DCOPY:DAT /TEE /LOG:"%COPY_LOG%"
+xcopy "%SOURCE_DIR%*" "%TARGET_DIR%\" /E /Y /I /H /R > "%COPY_LOG%" 2>&1
 set "COPY_EXIT=%ERRORLEVEL%"
-if %COPY_EXIT% GEQ 8 goto :copy_failed
+if not "%COPY_EXIT%"=="0" goto :copy_failed
 
 reg add "HKCU\Software\Adobe\CSXS.11" /v PlayerDebugMode /t REG_SZ /d 1 /f >nul
 if errorlevel 1 goto :registry_failed
@@ -48,7 +48,7 @@ exit /b 1
 
 :copy_failed
 echo.
-echo SceneKeeper files could not be copied. Robocopy exit code: %COPY_EXIT%
+echo SceneKeeper files could not be copied. Xcopy exit code: %COPY_EXIT%
 echo Copy log: %COPY_LOG%
 echo Check the log for the file or permission that caused the problem.
 pause
