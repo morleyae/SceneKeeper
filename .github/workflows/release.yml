@@ -18,7 +18,30 @@ jobs:
       - name: Build installer ZIP
         run: python3 scripts/package_release.py "$GITHUB_REF_NAME"
 
+      - name: Prepare release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" \
+            --jq .body > /tmp/scenekeeper-generated-notes.md
+          {
+            cat <<EOF
+          ## Download and install
+
+          1. Under **Assets**, download **SceneKeeper-${GITHUB_REF_NAME}.zip**. Do not download the “Source code” files.
+          2. Extract the ZIP and open the `SceneKeeper` folder.
+          3. Close After Effects. On macOS, run `install-macos.command` (right-click and choose **Open** if prompted). On Windows, run `install-windows.bat`.
+          4. Start After Effects and open **Window > Extensions (Legacy) > SceneKeeper**.
+
+          ---
+
+          ## Changes
+          EOF
+            cat /tmp/scenekeeper-generated-notes.md
+          } > /tmp/scenekeeper-release-notes.md
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" "dist/SceneKeeper-$GITHUB_REF_NAME.zip" --title "SceneKeeper $GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" "dist/SceneKeeper-$GITHUB_REF_NAME.zip" --title "SceneKeeper $GITHUB_REF_NAME" --notes-file /tmp/scenekeeper-release-notes.md
