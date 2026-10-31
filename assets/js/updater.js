@@ -32,7 +32,11 @@
     "1.0.30": ["The Random Clips Between Markers button now matches the height of the other clip buttons."],
     "1.0.31": ["Fixed saved clip previews when the default cache folder is missing or cannot be written; SceneKeeper can now use a writable fallback folder."],
     "1.0.32": ["After Effects now prepares and checks the preview cache folder before creating saved clip previews, with fallback locations if needed."],
-    "1.0.33": ["HEVC previews on Windows can fall back to a one-time download of a portable FFmpeg converter when Windows itself cannot decode the clip."]
+    "1.0.33": ["HEVC previews on Windows can fall back to a one-time download of a portable FFmpeg converter when Windows itself cannot decode the clip."],
+    "1.0.34": [
+      "License checks now allow more time and automatically retry once after a temporary connection or server error.",
+      "The SceneKeeper title no longer runs into the header buttons in narrow panels."
+    ]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");

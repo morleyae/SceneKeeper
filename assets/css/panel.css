@@ -1134,7 +1134,7 @@
 
     .section-heading-actions #settings-toggle { margin-left: 0; }
 
-    @media (max-width: 250px) {
+    @media (max-width: 320px) {
       .section-heading {
         gap: 2px;
       }
@@ -1160,9 +1160,11 @@
 
       .section-heading h1 {
         min-width: 0;
-        flex: 0 1 auto;
+        flex: 1 1 0;
         font-size: clamp(13px, 7.5vw, 16px);
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
     }

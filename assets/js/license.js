@@ -128,7 +128,7 @@
       const xhr = new XMLHttpRequest();
       xhr.open("POST", `${apiBaseUrl}${path}`, true);
       xhr.setRequestHeader("Content-Type", "application/json");
-      xhr.timeout = 10000;
+      xhr.timeout = 25000;
       xhr.onload = () => {
         let response;
         try {
@@ -161,6 +161,21 @@
     });
   }
 
+  async function requestWithRetry(path, body, onRetry) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await request(path, body);
+      } catch (error) {
+        const canRetry = attempt === 0 &&
+          (error.status === 0 || error.status === 408 || error.status === 429 || error.status >= 500);
+        if (!canRetry) throw error;
+        if (typeof onRetry === "function") onRetry();
+        await new Promise((resolve) => window.setTimeout(resolve, 800));
+      }
+    }
+    throw new Error("The license server did not respond. Please try again.");
+  }
+
   function showGate(copy, locked) {
     gateCopy.textContent = copy;
     cancelButton.hidden = locked;
@@ -185,7 +200,9 @@
 
     setStatus("Checking your SceneKeeper license...", false);
     try {
-      await request("/api/verify", { licenseKey, deviceId: getDeviceId() });
+      await requestWithRetry("/api/verify", { licenseKey, deviceId: getDeviceId() }, () => {
+        setStatus("The license server is taking longer than usual. Retrying...", false);
+      });
       setStoredValue(CHECKED_AT_STORAGE, String(Date.now()));
       isLicensed = true;
       gate.hidden = true;
@@ -225,7 +242,9 @@
       if (!ensurePersistentStorage()) {
         throw new Error("Could not save the license outside temporary CEP data. Check access to the user data folder and try again.");
       }
-      await request("/api/activate", { licenseKey, deviceId });
+      await requestWithRetry("/api/activate", { licenseKey, deviceId }, () => {
+        setStatus("The license server is taking longer than usual. Retrying...", false);
+      });
       setStoredValue(LICENSE_KEY_STORAGE, licenseKey);
       setStoredValue(CHECKED_AT_STORAGE, String(Date.now()));
       isLicensed = true;
