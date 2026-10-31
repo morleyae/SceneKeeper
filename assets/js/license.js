@@ -238,7 +238,7 @@
         const childProcess = cepNode.require("child_process");
         const marker = "\\nSCENEKeeperHTTPSTATUS:";
         const args = [
-          "--silent", "--show-error", "--connect-timeout", "15", "--max-time", "25",
+          "--silent", "--show-error", "--connect-timeout", "8", "--max-time", "15",
           "--request", "POST", "--header", "Content-Type: application/json",
           "--data-binary", "@-", "--write-out", `${marker}%{http_code}`,
           `${apiBaseUrl}${path}`
@@ -252,61 +252,84 @@
 
       let output = "";
       let errorOutput = "";
+      let settled = false;
+      let watchdog = null;
+      const finish = (handler, value) => {
+        if (settled) return;
+        settled = true;
+        if (watchdog) window.clearTimeout(watchdog);
+        handler(value);
+      };
       child.stdout.setEncoding("utf8");
       child.stderr.setEncoding("utf8");
       child.stdout.on("data", (chunk) => { output += chunk; });
       child.stderr.on("data", (chunk) => { errorOutput += chunk; });
       child.on("error", (error) => {
         if (typeof error.status !== "number") error.status = 0;
-        reject(error);
+        finish(reject, error);
       });
       child.on("close", (exitCode) => {
         const markerIndex = output.lastIndexOf("\nSCENEKeeperHTTPSTATUS:");
         if (markerIndex < 0) {
           const curlError = new Error(errorOutput.trim() || `macOS curl exited with code ${exitCode}.`);
           curlError.status = 0;
-          reject(curlError);
+          finish(reject, curlError);
           return;
         }
 
         const responseText = output.slice(0, markerIndex).trim();
         const statusText = output.slice(markerIndex + "\nSCENEKeeperHTTPSTATUS:".length).trim();
         const status = Number(statusText) || 0;
+        if (!status) {
+          const curlError = new Error(errorOutput.trim() || "macOS curl could not reach the license server.");
+          curlError.status = 0;
+          finish(reject, curlError);
+          return;
+        }
         let result;
         try {
           result = JSON.parse(responseText);
         } catch (error) {
           const parseError = new Error("The license server returned an invalid response.");
           parseError.status = status;
-          reject(parseError);
+          finish(reject, parseError);
           return;
         }
         if (status >= 200 && status < 300) {
-          resolve(result);
+          finish(resolve, result);
           return;
         }
         const responseError = new Error(result.error || `License check failed (${status}).`);
         responseError.status = status;
-        reject(responseError);
+        finish(reject, responseError);
       });
-      child.stdin.end(JSON.stringify(body));
+      watchdog = window.setTimeout(() => {
+        try { child.kill(); } catch (error) {}
+        const timeoutError = new Error("macOS could not complete the license request within 18 seconds.");
+        timeoutError.status = 0;
+        finish(reject, timeoutError);
+      }, 18000);
+      try {
+        child.stdin.end(JSON.stringify(body));
+      } catch (error) {
+        error.status = 0;
+        finish(reject, error);
+      }
     });
   }
 
   async function request(path, body) {
     const isMac = /Macintosh|Mac OS X/i.test(navigator.userAgent || "");
-    let lastNativeError = null;
     if (isMac) {
       try {
         return await requestViaMacCurl(path, body);
       } catch (curlError) {
-        if (curlError.status && curlError.status !== 408 && curlError.status !== 429 && curlError.status < 500) {
-          throw curlError;
-        }
-        lastNativeError = curlError;
+        if (curlError.message !== "CEP Node networking is unavailable.") throw curlError;
+        return requestViaXhr(path, body);
       }
     }
 
+    let lastNativeError = null;
     try {
       return await requestViaCepNode(path, body);
     } catch (nativeError) {
