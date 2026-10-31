@@ -126,6 +126,27 @@
     .scene-keeper-update-notice button:disabled { opacity: .65; cursor: wait; }
     .scene-keeper-update-notice[hidden] { display: none; }
 
+    .scene-keeper-whats-new { z-index: 1900; }
+
+    .scene-keeper-whats-new-content h2 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .scene-keeper-whats-new-content ul {
+      display: grid;
+      gap: 7px;
+      max-height: 45vh;
+      margin: 0 0 14px;
+      padding-left: 20px;
+      overflow: auto;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .scene-keeper-whats-new-content .confirm-actions { margin-top: 0; }
+
     .action-notification {
       position: fixed;
       z-index: 7000;

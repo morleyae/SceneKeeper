@@ -8,6 +8,26 @@
   const RETRY_INTERVAL_MS = 5 * 60 * 1000;
   const LAST_CHECK_KEY = "scenekeeper.update.lastCheck";
   const PENDING_UPDATE_KEY = "scenekeeper.update.pendingVersion";
+  const INSTALLED_VERSION_KEY = "scenekeeper.installedVersion";
+  const CHANGELOG_FEATURE_VERSION = "1.0.26";
+  const NO_HISTORY_VERSION_FLOOR = "1.0.16";
+  const RELEASE_NOTES = {
+    "1.0.17": ["Fixed backups and marker-based clip insertion on systems with older After Effects scripting support."],
+    "1.0.18": ["Update messages now explain when to restart After Effects."],
+    "1.0.19": ["Update status now changes when the download and installer start."],
+    "1.0.20": ["Made the four clip action buttons smaller and consistent."],
+    "1.0.21": ["Added clearer macOS update confirmations and error details."],
+    "1.0.22": ["Success and error messages now slide in briefly instead of staying in the panel."],
+    "1.0.23": ["Improved the macOS updater so it can keep running while After Effects closes."],
+    "1.0.24": ["On macOS, updates can install while After Effects is open; restart AE afterward to load them."],
+    "1.0.25": ["Linked the version number to GitHub releases and the creator name to TikTok."],
+    "1.0.26": ["Added this plain-language update summary after installing a new version."]
+  };
+  const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
+  const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
+  const whatsNewCopy = document.getElementById("scene-keeper-whats-new-copy");
+  const whatsNewList = document.getElementById("scene-keeper-whats-new-list");
+  const whatsNewClose = document.getElementById("scene-keeper-whats-new-close");
   let checkInFlight = false;
   let scheduledVersion = "";
   let nextCheckTimer = null;
@@ -282,6 +302,59 @@
     catch (error) {}
   }
 
+  function readStoredVersion() {
+    try { return String(window.localStorage.getItem(INSTALLED_VERSION_KEY) || ""); }
+    catch (error) { return ""; }
+  }
+
+  function storeCurrentVersion() {
+    try { window.localStorage.setItem(INSTALLED_VERSION_KEY, String(config.currentVersion || "")); }
+    catch (error) {}
+  }
+
+  function showWhatsNew(previousVersion, pendingVersion) {
+    const currentVersion = String(config.currentVersion || "");
+    const updateWasApplied = previousVersion
+      ? compareVersions(currentVersion, previousVersion) > 0
+      : (pendingVersion && compareVersions(currentVersion, pendingVersion) >= 0) ||
+        compareVersions(currentVersion, CHANGELOG_FEATURE_VERSION) >= 0;
+    if (!updateWasApplied || !whatsNewDialog || !whatsNewList) return false;
+
+    const releaseVersions = Object.keys(RELEASE_NOTES).sort(compareVersions).filter((version) =>
+      compareVersions(version, previousVersion || NO_HISTORY_VERSION_FLOOR) > 0 &&
+      compareVersions(version, currentVersion) <= 0
+    );
+    let notes = [];
+    for (let versionIndex = 0; versionIndex < releaseVersions.length; versionIndex++) {
+      notes = notes.concat(RELEASE_NOTES[releaseVersions[versionIndex]]);
+    }
+    if (!previousVersion) {
+      notes = [
+        "Backups and Random Clips Between Markers now work on more After Effects setups.",
+        "Update progress, restart instructions, and installation errors are clearer.",
+        "On macOS, updates can install while After Effects stays open; restart AE afterward.",
+        "Success and error messages slide in briefly, and the clip action buttons take up less space.",
+        "The footer links to GitHub releases and the creator’s TikTok profile.",
+        "This short What’s New summary appears after an update."
+      ];
+    }
+    if (!notes.length) notes = ["General improvements and fixes for a smoother SceneKeeper experience."];
+
+    whatsNewTitle.textContent = `What’s New in SceneKeeper v${currentVersion}`;
+    whatsNewCopy.textContent = previousVersion
+      ? `Since v${previousVersion}, SceneKeeper has changed in these ways:`
+      : "Here are the latest improvements in SceneKeeper:";
+    while (whatsNewList.firstChild) whatsNewList.removeChild(whatsNewList.firstChild);
+    for (let noteIndex = 0; noteIndex < notes.length; noteIndex++) {
+      const item = document.createElement("li");
+      item.textContent = notes[noteIndex];
+      whatsNewList.appendChild(item);
+    }
+    whatsNewDialog.hidden = false;
+    window.setTimeout(() => whatsNewClose && whatsNewClose.focus(), 0);
+    return true;
+  }
+
   function restorePendingUpdateNotice() {
     const pendingVersion = getPendingUpdateVersion();
     if (!pendingVersion) return;
@@ -291,6 +364,21 @@
       return;
     }
     showNotice(pendingVersion);
+  }
+
+  if (whatsNewClose) {
+    whatsNewClose.addEventListener("click", () => {
+      whatsNewDialog.hidden = true;
+      storeCurrentVersion();
+    });
+  }
+  if (whatsNewDialog) {
+    whatsNewDialog.addEventListener("click", (event) => {
+      if (event.target === whatsNewDialog) {
+        whatsNewDialog.hidden = true;
+        storeCurrentVersion();
+      }
+    });
   }
 
   function scheduleNextCheck(delay) {
@@ -379,7 +467,11 @@
     });
   }
 
+  const previouslyInstalledVersion = readStoredVersion();
+  const pendingVersionBeforeRestore = getPendingUpdateVersion();
   restorePendingUpdateNotice();
+  const whatsNewShown = showWhatsNew(previouslyInstalledVersion, pendingVersionBeforeRestore);
+  if (!whatsNewShown) storeCurrentVersion();
   if (retryUpdateButton) retryUpdateButton.addEventListener("click", retryPendingInstallation);
   if (window.SceneKeeperAppReady) checkForUpdates(true);
   else window.addEventListener("scenekeeper-app-ready", () => checkForUpdates(true), { once: true });
