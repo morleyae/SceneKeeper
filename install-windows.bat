@@ -21,8 +21,10 @@ echo Close After Effects before installing SceneKeeper.
 choice /C YN /N /M "Continue? [Y/N] "
 if errorlevel 2 exit /b 0
 
-if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
-if errorlevel 1 goto :folder_failed
+if not exist "%TARGET_DIR%" (
+  mkdir "%TARGET_DIR%"
+  if errorlevel 1 goto :folder_failed
+)
 
 set "COPY_LOG=%TEMP%\SceneKeeper-install-copy.log"
 xcopy "%SOURCE_DIR%*" "%TARGET_DIR%\" /E /Y /I /H /R > "%COPY_LOG%" 2>&1
