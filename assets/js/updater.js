@@ -129,12 +129,38 @@
 
     let launched;
     if (isWindows) {
-      const command = `-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "${helperPath}" "${statePath}"`;
-      launched = processApi.createProcess("powershell.exe", command);
+      const powershellPath = "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe";
+      launched = processApi.createProcess(
+        powershellPath,
+        "-NoProfile",
+        "-WindowStyle",
+        "Hidden",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        helperPath,
+        statePath
+      );
+      if (!launched || launched.err !== 0) {
+        launched = processApi.createProcess(
+          "powershell.exe",
+          "-NoProfile",
+          "-WindowStyle",
+          "Hidden",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          helperPath,
+          statePath
+        );
+      }
     } else {
       launched = processApi.createProcess("/bin/bash", helperPath, statePath);
     }
-    if (!launched || launched.err !== 0) return callback(new Error("Could not start the automatic installer"));
+    if (!launched || launched.err !== 0) {
+      const errorCode = launched && launched.err !== undefined ? ` (CEP error ${launched.err})` : "";
+      return callback(new Error(`Could not start the automatic installer${errorCode}`));
+    }
     callback(null);
   }
 
@@ -266,7 +292,7 @@
         }
         scheduleInstall(archivePath, release.tag_name, (installError) => {
           if (installError) {
-            showUpdateProblem(`SceneKeeper ${release.tag_name} was downloaded, but automatic installation could not be started. Close and reopen After Effects to retry.`);
+            showUpdateProblem(`SceneKeeper ${release.tag_name} was downloaded, but automatic installation could not be started: ${installError.message}. It will retry automatically.`);
             clearLastCheckTime();
             scheduleNextCheck(RETRY_INTERVAL_MS);
             return;
