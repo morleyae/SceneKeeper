@@ -187,14 +187,20 @@
     }
   }
 
+  function setNoticeMessage(message) {
+    if (!notice) return;
+    if (noticeMessage) noticeMessage.textContent = String(message || "");
+    else notice.textContent = String(message || "");
+    notice.hidden = false;
+  }
+
   function showUpdateProblem(message) {
     const pendingVersion = getPendingUpdateVersion();
     if (pendingVersion && compareVersions(config.currentVersion, pendingVersion) < 0) {
       showNotice(pendingVersion);
       return;
     }
-    notice.textContent = message;
-    notice.hidden = false;
+    setNoticeMessage(message);
   }
 
   function clearNotice() {
@@ -217,7 +223,7 @@
       scheduledVersion = "";
       clearLastCheckTime();
       if (retryUpdateButton) retryUpdateButton.disabled = true;
-      if (noticeMessage) noticeMessage.textContent = `The ${version} update package is missing. Checking GitHub again...`;
+      setNoticeMessage(`The ${version} update package is missing. Checking GitHub again...`);
       checkForUpdates(true);
       return;
     }
@@ -228,7 +234,7 @@
     }
     scheduleInstall(archivePath, version, (installError) => {
       if (installError) {
-        if (noticeMessage) noticeMessage.textContent = `Could not start the installer: ${installError.message}. Close After Effects and retry.`;
+        setNoticeMessage(`Could not start the installer: ${installError.message}. Close After Effects and retry.`);
         if (retryUpdateButton) {
           retryUpdateButton.disabled = false;
           retryUpdateButton.textContent = "Retry Update Install";
