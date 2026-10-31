@@ -22,12 +22,15 @@ choice /C YN /N /M "Continue? [Y/N] "
 if errorlevel 2 exit /b 0
 
 if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
-if errorlevel 1 goto :failed
-robocopy "%SOURCE_DIR%." "%TARGET_DIR%" /E /R:2 /W:1
-if errorlevel 8 goto :failed
+if errorlevel 1 goto :folder_failed
+
+set "COPY_LOG=%TEMP%\SceneKeeper-install-copy.log"
+robocopy "%SOURCE_DIR%." "%TARGET_DIR%" /E /R:2 /W:1 /COPY:DAT /DCOPY:DAT /TEE /LOG:"%COPY_LOG%"
+set "COPY_EXIT=%ERRORLEVEL%"
+if %COPY_EXIT% GEQ 8 goto :copy_failed
 
 reg add "HKCU\Software\Adobe\CSXS.11" /v PlayerDebugMode /t REG_SZ /d 1 /f >nul
-if errorlevel 1 goto :failed
+if errorlevel 1 goto :registry_failed
 
 echo.
 echo SceneKeeper was installed and CEP extensions were enabled.
@@ -35,8 +38,26 @@ echo Restart After Effects, then open Window ^> Extensions (Legacy) ^> SceneKeep
 pause
 exit /b 0
 
-:failed
+:folder_failed
 echo.
-echo Installation failed. Check your permissions and try again.
+echo SceneKeeper could not create the installation folder:
+echo %TARGET_DIR%
+echo Check that this Windows account can write to its AppData folder.
+pause
+exit /b 1
+
+:copy_failed
+echo.
+echo SceneKeeper files could not be copied. Robocopy exit code: %COPY_EXIT%
+echo Copy log: %COPY_LOG%
+echo Check the log for the file or permission that caused the problem.
+pause
+exit /b %COPY_EXIT%
+
+:registry_failed
+echo.
+echo SceneKeeper files were copied, but CEP could not be enabled automatically.
+echo Open Command Prompt as this same Windows user and run:
+echo reg add "HKCU\Software\Adobe\CSXS.11" /v PlayerDebugMode /t REG_SZ /d 1 /f
 pause
 exit /b 1
