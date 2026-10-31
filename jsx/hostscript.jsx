@@ -1,3 +1,134 @@
+if (typeof JSON === "undefined") JSON = {};
+
+if (typeof JSON.stringify !== "function") {
+    JSON.stringify = function (value) {
+        function quote(text) {
+            return '"' + String(text).replace(/[\\"\u0000-\u001f]/g, function (character) {
+                var escapes = { '"': '\\"', "\\": "\\\\", "\b": "\\b", "\f": "\\f", "\n": "\\n", "\r": "\\r", "\t": "\\t" };
+                if (escapes[character]) return escapes[character];
+                var hex = character.charCodeAt(0).toString(16);
+                return "\\u" + (hex.length < 4 ? ("0000" + hex).slice(-4) : hex);
+            }) + '"';
+        }
+
+        function serialize(item) {
+            if (item === null) return "null";
+            var type = typeof item;
+            if (type === "string") return quote(item);
+            if (type === "number") return isFinite(item) ? String(item) : "null";
+            if (type === "boolean") return item ? "true" : "false";
+            if (type === "undefined" || type === "function") return undefined;
+            if (item instanceof Array) {
+                var arrayValues = [];
+                for (var arrayIndex = 0; arrayIndex < item.length; arrayIndex++) {
+                    var arrayValue = serialize(item[arrayIndex]);
+                    arrayValues.push(arrayValue === undefined ? "null" : arrayValue);
+                }
+                return "[" + arrayValues.join(",") + "]";
+            }
+            var objectValues = [];
+            for (var key in item) {
+                if (!Object.prototype.hasOwnProperty.call(item, key)) continue;
+                var objectValue = serialize(item[key]);
+                if (objectValue !== undefined) objectValues.push(quote(key) + ":" + objectValue);
+            }
+            return "{" + objectValues.join(",") + "}";
+        }
+
+        return serialize(value);
+    };
+}
+
+if (typeof JSON.parse !== "function") {
+    JSON.parse = function (input) {
+        var source = String(input);
+        var position = 0;
+
+        function fail() { throw new Error("Invalid JSON at character " + position + "."); }
+        function skipWhitespace() {
+            while (position < source.length && /[\x20\t\r\n]/.test(source.charAt(position))) position++;
+        }
+        function parseString() {
+            if (source.charAt(position++) !== '"') fail();
+            var result = "";
+            while (position < source.length) {
+                var character = source.charAt(position++);
+                if (character === '"') return result;
+                if (character === "\\") {
+                    if (position >= source.length) fail();
+                    var escaped = source.charAt(position++);
+                    if (escaped === '"' || escaped === "\\" || escaped === "/") result += escaped;
+                    else if (escaped === "b") result += "\b";
+                    else if (escaped === "f") result += "\f";
+                    else if (escaped === "n") result += "\n";
+                    else if (escaped === "r") result += "\r";
+                    else if (escaped === "t") result += "\t";
+                    else if (escaped === "u") {
+                        var hex = source.substr(position, 4);
+                        if (!/^[0-9a-fA-F]{4}$/.test(hex)) fail();
+                        result += String.fromCharCode(parseInt(hex, 16));
+                        position += 4;
+                    } else fail();
+                } else {
+                    if (character.charCodeAt(0) < 32) fail();
+                    result += character;
+                }
+            }
+            fail();
+        }
+        function parseValue() {
+            skipWhitespace();
+            var character = source.charAt(position);
+            if (character === '"') return parseString();
+            if (character === "{") {
+                position++;
+                var object = {};
+                skipWhitespace();
+                if (source.charAt(position) === "}") { position++; return object; }
+                while (position < source.length) {
+                    skipWhitespace();
+                    if (source.charAt(position) !== '"') fail();
+                    var key = parseString();
+                    skipWhitespace();
+                    if (source.charAt(position++) !== ":") fail();
+                    object[key] = parseValue();
+                    skipWhitespace();
+                    var separator = source.charAt(position++);
+                    if (separator === "}") return object;
+                    if (separator !== ",") fail();
+                }
+                fail();
+            }
+            if (character === "[") {
+                position++;
+                var array = [];
+                skipWhitespace();
+                if (source.charAt(position) === "]") { position++; return array; }
+                while (position < source.length) {
+                    array.push(parseValue());
+                    skipWhitespace();
+                    var arraySeparator = source.charAt(position++);
+                    if (arraySeparator === "]") return array;
+                    if (arraySeparator !== ",") fail();
+                }
+                fail();
+            }
+            var literal;
+            if (source.substr(position, 4) === "true") { position += 4; return true; }
+            if (source.substr(position, 5) === "false") { position += 5; return false; }
+            if (source.substr(position, 4) === "null") { position += 4; return null; }
+            literal = source.substring(position).match(/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+\-]?[0-9]+)?/);
+            if (literal) { position += literal[0].length; return Number(literal[0]); }
+            fail();
+        }
+
+        var parsed = parseValue();
+        skipWhitespace();
+        if (position !== source.length) fail();
+        return parsed;
+    };
+}
+
 function cepTest() {
     return "After Effects " + app.version;
 }
