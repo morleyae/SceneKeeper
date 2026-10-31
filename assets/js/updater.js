@@ -157,7 +157,7 @@
         );
       }
     } else {
-      launched = processApi.createProcess("/bin/bash", helperPath, statePath);
+      launched = processApi.createProcess("/usr/bin/nohup", "/bin/bash", helperPath, statePath);
     }
     if (!launched || launched.err !== 0) {
       const errorCode = launched && launched.err !== undefined ? ` (CEP error ${launched.err})` : "";
@@ -180,7 +180,12 @@
 
   function showInstallerStarted(version) {
     showNotice(version);
-    if (noticeMessage) noticeMessage.textContent = `Installer started for ${version}. Close After Effects to let it finish, then reopen AE.`;
+    const isWindows = /win/i.test(navigator.platform || navigator.userAgent);
+    if (noticeMessage) {
+      noticeMessage.textContent = isWindows
+        ? `Installer started for ${version}. Close After Effects and wait for the installation confirmation before reopening AE.`
+        : `Installer started for ${version}. Close AE, confirm the update dialog, and wait for the completion dialog before reopening.`;
+    }
     if (retryUpdateButton) {
       retryUpdateButton.disabled = true;
       retryUpdateButton.textContent = "Installer Running";
