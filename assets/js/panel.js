@@ -1901,12 +1901,35 @@
       ];
       const isWindows = /Windows/i.test(navigator.userAgent || "");
       if (isWindows) {
-        return [
+        const converters = [
           { command: "ffmpeg.exe", args },
           { command: "C:\\ffmpeg\\bin\\ffmpeg.exe", args },
           { command: "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe", args },
           { command: "C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe", args }
         ];
+        const cep = window.__adobe_cep__;
+        if (cep && typeof cep.getSystemPath === "function") {
+          const extensionPath = decodeURI(cep.getSystemPath("extension") || "")
+            .replace(/^file:\/\//i, "")
+            .replace(/^\/([A-Za-z]:)/, "$1")
+            .replace(/\//g, "\\")
+            .replace(/\\$/, "");
+          if (extensionPath) {
+            const helperPath = `${extensionPath}\\scripts\\transcode-preview-windows.ps1`;
+            converters.push({
+              command: "powershell.exe",
+              args: [
+                "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+                "-ExecutionPolicy", "Bypass", "-File", helperPath,
+                "-SourcePath", sourcePath,
+                "-StartSeconds", start,
+                "-DurationSeconds", duration,
+                "-OutputPath", job.outputPath
+              ]
+            });
+          }
+        }
+        return converters;
       }
 
       return [

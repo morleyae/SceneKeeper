@@ -4,6 +4,7 @@
   const noticeMessage = document.getElementById("scene-keeper-update-message");
   const retryUpdateButton = document.getElementById("scene-keeper-retry-update");
   const versionLabel = document.getElementById("scene-keeper-version");
+  const creatorLink = document.getElementById("scene-keeper-creator-link");
   const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
   const RETRY_INTERVAL_MS = 5 * 60 * 1000;
   const LAST_CHECK_KEY = "scenekeeper.update.lastCheck";
@@ -30,7 +31,8 @@
     "1.0.29": ["The full “by morley.ae” credit now links to TikTok."],
     "1.0.30": ["The Random Clips Between Markers button now matches the height of the other clip buttons."],
     "1.0.31": ["Fixed saved clip previews when the default cache folder is missing or cannot be written; SceneKeeper can now use a writable fallback folder."],
-    "1.0.32": ["After Effects now prepares and checks the preview cache folder before creating saved clip previews, with fallback locations if needed."]
+    "1.0.32": ["After Effects now prepares and checks the preview cache folder before creating saved clip previews, with fallback locations if needed."],
+    "1.0.33": ["HEVC previews on Windows can fall back to a one-time download of a portable FFmpeg converter when Windows itself cannot decode the clip."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -44,6 +46,25 @@
   if (versionLabel) {
     const currentVersion = String(config.currentVersion || "").replace(/^v/i, "");
     versionLabel.textContent = currentVersion ? `SceneKeeper v${currentVersion}` : "SceneKeeper";
+    const repository = String(config.repository || "morleyae/SceneKeeper").replace(/^https?:\/\/github\.com\//i, "").replace(/\/+$/, "");
+    versionLabel.href = `https://github.com/${repository}/releases/latest`;
+  }
+
+  [versionLabel, creatorLink].forEach((link) => {
+    if (!link) return;
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const cep = window.cep || window.__adobe_cep__;
+      if (cep && cep.util && typeof cep.util.openURLInDefaultBrowser === "function") {
+        cep.util.openURLInDefaultBrowser(link.href);
+        return;
+      }
+      window.open(link.href, "_blank", "noopener");
+    });
+  });
+
+  if (creatorLink) {
+    creatorLink.href = "https://www.tiktok.com/@morley.ae";
   }
 
   function compareVersions(first, second) {
