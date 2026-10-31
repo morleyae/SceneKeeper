@@ -234,7 +234,7 @@
     }, Math.max(1000, Number(delay) || RETRY_INTERVAL_MS));
   }
 
-  function checkForUpdates() {
+  function checkForUpdates(forceCheck) {
     if (checkInFlight) return;
     if (!config.repository || !config.currentVersion || !notice) return;
 
@@ -243,9 +243,16 @@
       return;
     }
 
+    const pendingVersion = getPendingUpdateVersion();
+    if (pendingVersion && compareVersions(config.currentVersion, pendingVersion) < 0) {
+      showNotice(pendingVersion);
+      scheduleNextCheck(CHECK_INTERVAL_MS);
+      return;
+    }
+
     const lastCheck = getLastCheckTime();
     const waitForNextAllowedCheck = CHECK_INTERVAL_MS - (Date.now() - lastCheck);
-    if (waitForNextAllowedCheck > 0) {
+    if (!forceCheck && waitForNextAllowedCheck > 0) {
       scheduleNextCheck(waitForNextAllowedCheck);
       return;
     }
@@ -306,6 +313,6 @@
   }
 
   restorePendingUpdateNotice();
-  if (window.SceneKeeperAppReady) checkForUpdates();
-  else window.addEventListener("scenekeeper-app-ready", checkForUpdates, { once: true });
+  if (window.SceneKeeperAppReady) checkForUpdates(true);
+  else window.addEventListener("scenekeeper-app-ready", () => checkForUpdates(true), { once: true });
 })();
