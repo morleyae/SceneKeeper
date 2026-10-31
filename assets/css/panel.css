@@ -1801,9 +1801,12 @@
     .clip-action-row > button {
       min-width: 0;
       min-height: 32px;
+      height: 32px;
       margin-top: 4px;
-      padding: 5px 4px;
-      white-space: normal;
+      padding: 4px 2px;
+      font-size: 10px;
+      line-height: 1.15;
+      white-space: nowrap;
     }
 
     .library-actions svg { display: block; width: 16px; height: 16px; }
