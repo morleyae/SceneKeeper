@@ -1741,19 +1741,22 @@
     const storedPreviewQueue = [];
     const permanentlyDeletedPreviewKeys = new Set();
     let storedPreviewConversionActive = false;
+    let storedPreviewCacheDirectory = "";
+    let storedPreviewCacheDirectoryHostVerified = false;
 
     function getStoredPreviewIdentity(record) {
       return `${record.sourcePath}|${record.sourceIn}|${record.sourceOut}`;
     }
 
-    function getStoredPreviewPath(record, requestedVersion) {
+    function getStoredPreviewPath(record, requestedVersion, directoryOverride) {
       const cep = window.__adobe_cep__;
       const fs = window.cep && window.cep.fs;
       if (!cep || !fs || typeof fs.makedir !== "function" || typeof fs.stat !== "function") {
         throw new Error("CEP file APIs are unavailable.");
       }
-      const userDataPath = decodeURI(cep.getSystemPath("userData") || "").replace(/^file:\/\//, "").replace(/\/$/, "");
-      const cacheDirectory = userDataPath + "/CEP Tool/preview-cache";
+      let userDataPath = decodeURI(cep.getSystemPath("userData") || "").replace(/^file:\/\//, "").replace(/\\/g, "/");
+      userDataPath = userDataPath.replace(/^\/([A-Za-z]:\/)/, "$1").replace(/\/$/, "");
+      const cacheDirectory = directoryOverride || storedPreviewCacheDirectory || (userDataPath + "/CEP Tool/preview-cache");
       const clipDuration = Math.max(0, Number(record.sourceOut) - Number(record.sourceIn));
       const cacheVersion = requestedVersion || (clipDuration > 15 ? "small-h264-v3-15s" : "small-h264-v2");
       const cacheKey = `${cacheVersion}|${record.sourcePath}|${record.sourceIn}|${record.sourceOut}`;
@@ -1840,6 +1843,38 @@
       );
     }
 
+    function ensureStoredPreviewDirectory(path) {
+      const fs = window.cep && window.cep.fs;
+      if (!fs || typeof fs.stat !== "function" || typeof fs.makedir !== "function") return false;
+      const existing = fs.stat(path);
+      if (existing && existing.err === 0) {
+        return Boolean(existing.data && typeof existing.data.isDirectory === "function" && existing.data.isDirectory());
+      }
+      const created = fs.makedir(path);
+      if (created && created.err === 0) return true;
+      const afterCreate = fs.stat(path);
+      return Boolean(afterCreate && afterCreate.err === 0 && afterCreate.data &&
+        typeof afterCreate.data.isDirectory === "function" && afterCreate.data.isDirectory());
+    }
+
+    function resolveStoredPreviewCacheDirectory(callback) {
+      const cep = window.__adobe_cep__;
+      if (!cep || typeof cep.evalScript !== "function") {
+        callback("", "After Effects could not provide a writable preview folder.");
+        return;
+      }
+      cep.evalScript("getSceneKeeperPreviewCacheDirectory()", (response) => {
+        const value = String(response || "").trim();
+        if (!value || value === "EvalScript error." || value.indexOf("ERROR:") === 0) {
+          callback("", value || "After Effects could not provide a writable preview folder.");
+          return;
+        }
+        const directory = value.replace(/^file:\/\//i, "").replace(/\\/g, "/")
+          .replace(/^\/([A-Za-z]:\/)/, "$1").replace(/\/+$/, "");
+        callback(directory, "");
+      });
+    }
+
     function getCachedStoredPreviewPath(record) {
       try {
         const path = getStoredPreviewPath(record);
@@ -1921,15 +1956,36 @@
       }
 
       const candidates = buildStoredPreviewConverters(job);
-      const fs = window.cep && window.cep.fs;
       const directoryPath = job.outputPath.substring(0, job.outputPath.lastIndexOf("/"));
-      const directory = fs.stat(directoryPath);
-      if (!directory || directory.err !== 0) {
-        const created = fs.makedir(directoryPath);
-        if (!created || created.err !== 0) {
-          finishStoredPreviewJob(job, "", "Could not create the stored preview folder.");
+      const parentPath = directoryPath.substring(0, directoryPath.lastIndexOf("/"));
+      if (!storedPreviewCacheDirectoryHostVerified &&
+          (!ensureStoredPreviewDirectory(parentPath) || !ensureStoredPreviewDirectory(directoryPath))) {
+        if (job.previewFallbackAttempted) {
+          finishStoredPreviewJob(job, "", `Could not create the stored preview folder: ${directoryPath}`);
           return;
         }
+        job.previewFallbackAttempted = true;
+        resolveStoredPreviewCacheDirectory((fallbackDirectory, fallbackError) => {
+          if (!fallbackDirectory) {
+            finishStoredPreviewJob(job, "", `${fallbackError} Could not create the preview folder at ${directoryPath}.`);
+            return;
+          }
+          storedPreviewCacheDirectory = fallbackDirectory;
+          storedPreviewCacheDirectoryHostVerified = true;
+          try {
+            job.outputPath = getStoredPreviewPath(job.record);
+          } catch (pathError) {
+            finishStoredPreviewJob(job, "", pathError.message || "Could not locate a writable preview folder.");
+            return;
+          }
+          if (hasStoredPreview(job.outputPath)) {
+            finishStoredPreviewJob(job, job.outputPath, "");
+            return;
+          }
+          storedPreviewQueue.unshift(job);
+          window.setTimeout(processStoredPreviewQueue, 0);
+        });
+        return;
       }
       storedPreviewConversionActive = true;
       const tryCandidate = (index, lastError) => {

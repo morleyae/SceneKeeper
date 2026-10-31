@@ -544,8 +544,57 @@ function writeClipTrashRecords(records) {
 
 var clipPreviewCleanupWarning = "";
 
-function getClipPreviewCachePath(record, version) {
-    var folder = new Folder(Folder.userData.fsName + "/CEP Tool/preview-cache");
+function sceneEnsurePreviewFolder(folder) {
+    if (!folder) return false;
+    try {
+        if (folder.exists) return true;
+        var parent = folder.parent;
+        if (parent && !parent.exists && !parent.create()) return false;
+        return folder.create() || folder.exists;
+    } catch (folderError) {
+        return false;
+    }
+}
+
+function getSceneKeeperPreviewCacheFolders() {
+    var folders = [];
+    try {
+        folders.push(new Folder(Folder.userData.fsName + "/CEP Tool/preview-cache"));
+    } catch (primaryCacheError) {}
+    try {
+        var temporaryFolder = new Folder(Folder.temp.fsName + "/SceneKeeper/preview-cache");
+        var duplicateTemporary = false;
+        for (var temporaryIndex = 0; temporaryIndex < folders.length; temporaryIndex++) {
+            if (folders[temporaryIndex].fsName === temporaryFolder.fsName) duplicateTemporary = true;
+        }
+        if (!duplicateTemporary) folders.push(temporaryFolder);
+    } catch (temporaryCacheError) {}
+    try {
+        var documentsFolder = sceneKeeperDocumentsDataFolder();
+        if (documentsFolder) {
+            var documentsCache = new Folder(documentsFolder.fsName + "/preview-cache");
+            var duplicate = false;
+            for (var i = 0; i < folders.length; i++) {
+                if (folders[i].fsName === documentsCache.fsName) duplicate = true;
+            }
+            if (!duplicate) folders.push(documentsCache);
+        }
+    } catch (documentsCacheError) {}
+    return folders;
+}
+
+function getSceneKeeperPreviewCacheDirectory() {
+    var folders = getSceneKeeperPreviewCacheFolders();
+    for (var i = folders.length - 1; i >= 0; i--) {
+        if (sceneEnsurePreviewFolder(folders[i].parent) && sceneEnsurePreviewFolder(folders[i]) && sceneKeeperFolderIsWritable(folders[i])) {
+            return folders[i].fsName.replace(/\\/g, "/");
+        }
+    }
+    return "ERROR: SceneKeeper cannot create a preview cache in Adobe user data, Documents, or temporary storage.";
+}
+
+function getClipPreviewCachePath(record, version, folderOverride) {
+    var folder = folderOverride || new Folder(Folder.userData.fsName + "/CEP Tool/preview-cache");
     var identity = record.sourcePath + "|" + record.sourceIn + "|" + record.sourceOut;
     var key = version + "|" + identity;
     var hash = 2166136261;
@@ -608,12 +657,13 @@ function removeOrphanedClipPreviews(entries) {
     }
     for (var candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
         for (var versionIndex = 0; versionIndex < versions.length; versionIndex++) {
-            var previewFile = getClipPreviewCachePath(candidates[candidateIndex], versions[versionIndex]);
-            if (!previewFile.exists) {
-                continue;
-            }
-            if (!previewFile.remove()) {
-                clipPreviewCleanupWarning = " A preview file could not be removed: " + previewFile.fsName;
+            var cacheFolders = getSceneKeeperPreviewCacheFolders();
+            for (var folderIndex = 0; folderIndex < cacheFolders.length; folderIndex++) {
+                var previewFile = getClipPreviewCachePath(candidates[candidateIndex], versions[versionIndex], cacheFolders[folderIndex]);
+                if (!previewFile.exists) continue;
+                if (!previewFile.remove()) {
+                    clipPreviewCleanupWarning = " A preview file could not be removed: " + previewFile.fsName;
+                }
             }
         }
     }
@@ -1733,9 +1783,11 @@ function deleteAllClipLibraryData() {
 
     var dataFolder = getSceneKeeperDataFolder();
     if (!dataFolder) return "ERROR: Could not access SceneKeeper storage. " + sceneKeeperDataFolderError;
-    var previewCache = new Folder(Folder.userData.fsName + "/CEP Tool/preview-cache");
-    if (!removeClipPreviewCacheFolder(previewCache)) {
-        return "ERROR: Could not completely remove cached preview videos.";
+    var previewCacheFolders = getSceneKeeperPreviewCacheFolders();
+    for (var previewFolderIndex = 0; previewFolderIndex < previewCacheFolders.length; previewFolderIndex++) {
+        if (!removeClipPreviewCacheFolder(previewCacheFolders[previewFolderIndex])) {
+            return "ERROR: Could not completely remove cached preview videos.";
+        }
     }
 
     var libraryFiles = ["clip-favorites.txt", "clip-folders.txt", "clip-trash.txt"];
