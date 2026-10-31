@@ -22,22 +22,114 @@ var clipToolRedoHistory = [];
 var CLIP_TOOL_HISTORY_LIMIT = 100;
 var clipTrashSequence = 0;
 var clipRecordSequence = 0;
+var sceneKeeperDataFolderCache = null;
+var sceneKeeperDataFolderError = "";
 
-function createSceneKeeperBackup() {
-    var folder = new Folder(Folder.userData.fsName + "/CEP Tool/SceneKeeper Backups");
-    if (!folder.exists && !folder.create()) return "ERROR: Could not create backup folder.";
+function sceneKeeperFolderIsWritable(folder) {
+    if (!folder) return false;
+    try {
+        if (!folder.exists && !folder.create()) return false;
+        var probe = new File(folder.fsName + "/.SceneKeeper-write-test-" + new Date().getTime() + ".tmp");
+        probe.encoding = "UTF-8";
+        if (!probe.open("w")) return false;
+        try { probe.write("SceneKeeper"); } catch (writeError) { probe.close(); try { probe.remove(); } catch (removeError) {} return false; }
+        probe.close();
+        try { if (probe.exists) probe.remove(); } catch (cleanupError) {}
+        return true;
+    } catch (folderError) {
+        return false;
+    }
+}
+
+function sceneKeeperMigrateDataFiles(sourceFolder, destinationFolder) {
+    if (!sourceFolder || !sourceFolder.exists || !destinationFolder || !destinationFolder.exists) return true;
+    var names = ["clip-favorites.txt", "clip-folders.txt", "clip-trash.txt", "settings.txt"];
+    for (var i = 0; i < names.length; i++) {
+        var sourceFile = new File(sourceFolder.fsName + "/" + names[i]);
+        var destinationFile = new File(destinationFolder.fsName + "/" + names[i]);
+        if (sourceFile.exists && !destinationFile.exists && !sourceFile.copy(destinationFile.fsName)) return false;
+    }
+
+    var sourceBackups = new Folder(sourceFolder.fsName + "/SceneKeeper Backups");
+    if (sourceBackups.exists) {
+        var destinationBackups = new Folder(destinationFolder.fsName + "/SceneKeeper Backups");
+        if (!destinationBackups.exists && !destinationBackups.create()) return false;
+        var backupFiles = sourceBackups.getFiles("SceneKeeper-*.json") || [];
+        for (i = 0; i < backupFiles.length; i++) {
+            var destinationBackup = new File(destinationBackups.fsName + "/" + backupFiles[i].name);
+            if (!destinationBackup.exists && !backupFiles[i].copy(destinationBackup.fsName)) return false;
+        }
+    }
+    return true;
+}
+
+function sceneKeeperDocumentsDataFolder() {
+    try { return new Folder(Folder.myDocuments.fsName + "/SceneKeeper Data"); }
+    catch (documentsPathError) { return null; }
+}
+
+function sceneKeeperUseDocumentsDataFolder(sourceFolder) {
+    var fallbackFolder = sceneKeeperDocumentsDataFolder();
+    if (!sceneKeeperFolderIsWritable(fallbackFolder)) return null;
+    if (sourceFolder && sourceFolder.fsName !== fallbackFolder.fsName && sourceFolder.exists &&
+        !sceneKeeperMigrateDataFiles(sourceFolder, fallbackFolder)) {
+        sceneKeeperDataFolderError = "SceneKeeper cannot copy its existing library from " + sourceFolder.fsName + " to " + fallbackFolder.fsName + ". Check the folder permissions.";
+        return null;
+    }
+    var markerFile = new File(fallbackFolder.fsName + "/.SceneKeeper-storage-location");
+    if (!markerFile.exists) {
+        markerFile.encoding = "UTF-8";
+        if (markerFile.open("w")) {
+            try { markerFile.write("Documents"); } catch (markerWriteError) {}
+            markerFile.close();
+        }
+    }
+    sceneKeeperDataFolderCache = fallbackFolder;
+    sceneKeeperDataFolderError = "SceneKeeper is using its Documents data folder because the Adobe user-data folder is not writable.";
+    return sceneKeeperDataFolderCache;
+}
+
+function getSceneKeeperDataFolder() {
+    if (sceneKeeperDataFolderCache && sceneKeeperDataFolderCache.exists) return sceneKeeperDataFolderCache;
+
+    var primaryFolder = null;
+    try { primaryFolder = new Folder(Folder.userData.fsName + "/CEP Tool"); } catch (primaryPathError) {}
+    var fallbackFolder = sceneKeeperDocumentsDataFolder();
+    var markerFile = fallbackFolder ? new File(fallbackFolder.fsName + "/.SceneKeeper-storage-location") : null;
+    if (markerFile && markerFile.exists) {
+        if (sceneKeeperFolderIsWritable(fallbackFolder)) {
+            sceneKeeperDataFolderCache = fallbackFolder;
+            sceneKeeperDataFolderError = "";
+            return sceneKeeperDataFolderCache;
+        }
+        sceneKeeperDataFolderError = "SceneKeeper's saved data folder is not writable: " + fallbackFolder.fsName + ". Check its permissions and available disk space.";
+        return null;
+    }
+
+    if (sceneKeeperFolderIsWritable(primaryFolder)) {
+        sceneKeeperDataFolderCache = primaryFolder;
+        sceneKeeperDataFolderError = "";
+        return sceneKeeperDataFolderCache;
+    }
+
+    var documentsFallback = sceneKeeperUseDocumentsDataFolder(primaryFolder);
+    if (documentsFallback) return documentsFallback;
+
+    var primaryPath = primaryFolder ? primaryFolder.fsName : "Adobe user-data folder";
+    var fallbackPath = fallbackFolder ? fallbackFolder.fsName : "Documents folder";
+    sceneKeeperDataFolderError = "SceneKeeper cannot write to " + primaryPath + " or " + fallbackPath + ". Check folder permissions and available disk space.";
+    return null;
+}
+
+function sceneCreateBackupInDataFolder(dataFolder, snapshot) {
+    if (!dataFolder) return "ERROR: Could not access SceneKeeper storage. " + sceneKeeperDataFolderError;
+    var folder = new Folder(dataFolder.fsName + "/SceneKeeper Backups");
+    if (!folder.exists && !folder.create()) return "ERROR: Could not create backup folder at " + folder.fsName + ". Check folder permissions and available disk space.";
     var stamp = (new Date()).getTime();
     var file = new File(folder.fsName + "/SceneKeeper-" + stamp + ".json");
-    var snapshot = {
-        version: 1,
-        createdAt: String(new Date()),
-        favorites: readClipFavoriteRecords(),
-        folders: readClipFolderRecords(),
-        trash: readClipTrashRecords()
-    };
     file.encoding = "UTF-8";
-    if (!file.open("w")) return "ERROR: Could not write SceneKeeper backup.";
-    try { file.write(JSON.stringify(snapshot)); } catch (e) { file.close(); return "ERROR: Could not write SceneKeeper backup."; }
+    if (!file.open("w")) return "ERROR: Could not write SceneKeeper backup to " + file.fsName + ". Check folder permissions and available disk space.";
+    try { file.write(JSON.stringify(snapshot)); } catch (e) { file.close(); return "ERROR: Could not write SceneKeeper backup to " + file.fsName + ". " + e.toString(); }
     file.close();
     var backups = folder.getFiles("SceneKeeper-*.json");
     backups.sort(function (a, b) { return b.modified.getTime() - a.modified.getTime(); });
@@ -45,27 +137,39 @@ function createSceneKeeperBackup() {
     return "BACKUP_SAVED";
 }
 
+function createSceneKeeperBackup() {
+    var dataFolder = getSceneKeeperDataFolder();
+    if (!dataFolder) return "ERROR: Could not access SceneKeeper storage. " + sceneKeeperDataFolderError;
+    var snapshot = {
+        version: 1,
+        createdAt: String(new Date()),
+        favorites: readClipFavoriteRecords(),
+        folders: readClipFolderRecords(),
+        trash: readClipTrashRecords()
+    };
+    var result = sceneCreateBackupInDataFolder(dataFolder, snapshot);
+    if (result === "BACKUP_SAVED") return result;
+
+    var fallbackFolder = sceneKeeperUseDocumentsDataFolder(dataFolder);
+    if (!fallbackFolder || fallbackFolder.fsName === dataFolder.fsName) return result;
+    return sceneCreateBackupInDataFolder(fallbackFolder, snapshot);
+}
+
 function getClipFavoritesFile() {
-    var folder = new Folder(Folder.userData.fsName + "/CEP Tool");
-    if (!folder.exists && !folder.create()) {
-        return null;
-    }
+    var folder = getSceneKeeperDataFolder();
+    if (!folder) return null;
     return new File(folder.fsName + "/clip-favorites.txt");
 }
 
 function getClipFoldersFile() {
-    var folder = new Folder(Folder.userData.fsName + "/CEP Tool");
-    if (!folder.exists && !folder.create()) {
-        return null;
-    }
+    var folder = getSceneKeeperDataFolder();
+    if (!folder) return null;
     return new File(folder.fsName + "/clip-folders.txt");
 }
 
 function getClipTrashFile() {
-    var folder = new Folder(Folder.userData.fsName + "/CEP Tool");
-    if (!folder.exists && !folder.create()) {
-        return null;
-    }
+    var folder = getSceneKeeperDataFolder();
+    if (!folder) return null;
     return new File(folder.fsName + "/clip-trash.txt");
 }
 
@@ -524,18 +628,11 @@ function writeClipFolderRecords(records) {
             encodeURIComponent(records[i].parentId || "") + "\t" +
             (typeof records[i].sortOrder === "number" && !isNaN(records[i].sortOrder) ? String(records[i].sortOrder) : ""));
     }
-    file.encoding = "UTF-8";
-    if (!file.open("w")) {
-        return false;
-    }
-    try {
-        file.write(lines.length ? lines.join("\n") + "\n" : "");
-    } catch (e) {
-        file.close();
-        return false;
-    }
-    file.close();
-    return true;
+    if (sceneWriteDataFileLines(file, lines)) return true;
+    var failedFolder = sceneKeeperDataFolderCache;
+    var fallbackFolder = sceneKeeperUseDocumentsDataFolder(failedFolder);
+    if (!fallbackFolder || (failedFolder && fallbackFolder.fsName === failedFolder.fsName)) return false;
+    return sceneWriteDataFileLines(new File(fallbackFolder.fsName + "/clip-folders.txt"), lines);
 }
 
 function listClipFolders() {
@@ -864,27 +961,34 @@ function assignClipFavoriteFolder(index, encodedFolderId) {
     return folderId ? "Moved clip to collection." : "Moved clip to Home.";
 }
 
-function writeClipFavoriteRecords(records) {
-    var file = getClipFavoritesFile();
-    if (!file) {
-        return false;
-    }
-    var lines = [];
-    for (var i = 0; i < records.length; i++) {
-        lines.push(encodeClipFavoriteRecord(records[i]));
-    }
+function sceneWriteDataFileLines(file, lines) {
+    if (!file) return false;
     file.encoding = "UTF-8";
     if (!file.open("w")) {
+        sceneKeeperDataFolderError = "SceneKeeper could not write to " + file.fsName + ". Check folder permissions and available disk space.";
         return false;
     }
     try {
         file.write(lines.length ? lines.join("\n") + "\n" : "");
     } catch (e) {
         file.close();
+        sceneKeeperDataFolderError = "SceneKeeper could not write to " + file.fsName + ". " + e.toString();
         return false;
     }
     file.close();
     return true;
+}
+
+function writeClipFavoriteRecords(records) {
+    var lines = [];
+    for (var i = 0; i < records.length; i++) lines.push(encodeClipFavoriteRecord(records[i]));
+    var file = getClipFavoritesFile();
+    if (sceneWriteDataFileLines(file, lines)) return true;
+
+    var failedFolder = sceneKeeperDataFolderCache;
+    var fallbackFolder = sceneKeeperUseDocumentsDataFolder(failedFolder);
+    if (!fallbackFolder || (failedFolder && fallbackFolder.fsName === failedFolder.fsName)) return false;
+    return sceneWriteDataFileLines(new File(fallbackFolder.fsName + "/clip-favorites.txt"), lines);
 }
 
 function getClipLibrarySnapshot() {
@@ -1223,10 +1327,8 @@ function listClipFavoriteFootageStatus() {
 }
 
 function getClipSettingsFile() {
-    var folder = new Folder(Folder.userData.fsName + "/CEP Tool");
-    if (!folder.exists && !folder.create()) {
-        return null;
-    }
+    var folder = getSceneKeeperDataFolder();
+    if (!folder) return null;
     return new File(folder.fsName + "/settings.txt");
 }
 
@@ -1478,12 +1580,13 @@ function deleteAllClipLibraryData() {
     clipToolRedoHistory = [];
     pendingClipFavoriteReplacement = null;
 
+    var dataFolder = getSceneKeeperDataFolder();
+    if (!dataFolder) return "ERROR: Could not access SceneKeeper storage. " + sceneKeeperDataFolderError;
     var previewCache = new Folder(Folder.userData.fsName + "/CEP Tool/preview-cache");
     if (!removeClipPreviewCacheFolder(previewCache)) {
         return "ERROR: Could not completely remove cached preview videos.";
     }
 
-    var dataFolder = new Folder(Folder.userData.fsName + "/CEP Tool");
     var libraryFiles = ["clip-favorites.txt", "clip-folders.txt", "clip-trash.txt"];
     for (var i = 0; i < libraryFiles.length; i++) {
         var file = new File(dataFolder.fsName + "/" + libraryFiles[i]);
@@ -2172,7 +2275,7 @@ function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, save
     records.push(newRecord);
 
     if (!writeClipFavoriteRecords(records)) {
-        return "ERROR: Could not save the clip.";
+        return "ERROR: Could not save the clip. " + (sceneKeeperDataFolderError || "Check that the SceneKeeper data folder is writable.");
     }
     lastClipFavoriteSavedId = newRecord.clipId;
     pendingClipFavoriteCapture = null;
@@ -3277,7 +3380,10 @@ function sceneParseRandomFolderSelection(folderId) {
     if (folderId.charAt(0) !== "[" && folderId.charAt(0) !== "{") return selection;
     var parsed;
     try { parsed = JSON.parse(folderId); }
-    catch (e) { throw new Error("The selected source folders could not be read."); }
+    catch (e) {
+        try { parsed = JSON.parse(decodeURIComponent(folderId)); }
+        catch (decodeError) { throw new Error("The selected source-folder list is invalid. Close the folder picker, select the folders again, and retry."); }
+    }
     var included = parsed instanceof Array ? parsed : (parsed.include || []);
     var excluded = parsed instanceof Array ? [] : (parsed.exclude || []);
     if (!(included instanceof Array) || !(excluded instanceof Array) || !included.length) {
@@ -3300,7 +3406,7 @@ function sceneReadRandomMarkerFolderSelection(encodedFolderSelection) {
     selectionFile.encoding = "UTF-8";
     if (!selectionFile.open("r")) throw new Error("The temporary source-folder selection could not be opened.");
     try {
-        folderSelectionText = selectionFile.read();
+        folderSelectionText = String(selectionFile.read() || "").replace(/^\uFEFF/, "").replace(/^\s+|\s+$/g, "");
     } finally {
         selectionFile.close();
     }

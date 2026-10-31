@@ -6153,24 +6153,33 @@
       const cepHost = window.__adobe_cep__;
       const fs = window.cep && window.cep.fs;
       if (!cepHost || typeof cepHost.getSystemPath !== "function" || !fs || typeof fs.writeFile !== "function") return "";
-      let userDataPath = String(cepHost.getSystemPath("userData") || "").replace(/^file:\/\//, "");
-      try { userDataPath = decodeURI(userDataPath); } catch (error) {}
-      userDataPath = userDataPath.replace(/\\/g, "/").replace(/\/$/, "");
-      if (/^\/[A-Za-z]:\//.test(userDataPath)) userDataPath = userDataPath.substring(1);
-      if (!userDataPath) return "";
+      const normalizeSystemPath = (path) => {
+        let value = String(path || "").replace(/^file:\/\//, "");
+        try { value = decodeURI(value); } catch (error) {}
+        value = value.replace(/\\/g, "/").replace(/\/$/, "");
+        if (/^\/[A-Za-z]:\//.test(value)) value = value.substring(1);
+        return value;
+      };
+      const candidateDirectories = [];
+      const userDataPath = normalizeSystemPath(cepHost.getSystemPath("userData"));
+      const documentsPath = normalizeSystemPath(cepHost.getSystemPath("myDocuments"));
+      if (userDataPath) candidateDirectories.push(`${userDataPath}/SceneKeeper`);
+      if (documentsPath) candidateDirectories.push(`${documentsPath}/SceneKeeper Data`);
 
-      const selectionDirectory = `${userDataPath}/SceneKeeper`;
-      const directoryStat = fs.stat(selectionDirectory);
-      const directoryExists = directoryStat && directoryStat.err === 0 && directoryStat.data &&
-        typeof directoryStat.data.isDirectory === "function" && directoryStat.data.isDirectory();
-      if (!directoryExists) {
-        const createdDirectory = fs.makedir(selectionDirectory);
-        if (!createdDirectory || createdDirectory.err !== 0) return "";
+      for (const selectionDirectory of candidateDirectories) {
+        const directoryStat = fs.stat(selectionDirectory);
+        const directoryExists = directoryStat && directoryStat.err === 0 && directoryStat.data &&
+          typeof directoryStat.data.isDirectory === "function" && directoryStat.data.isDirectory();
+        if (!directoryExists) {
+          const createdDirectory = fs.makedir(selectionDirectory);
+          if (!createdDirectory || createdDirectory.err !== 0) continue;
+        }
+
+        const selectionFilePath = `${selectionDirectory}/random-marker-folder-selection.json`;
+        const written = fs.writeFile(selectionFilePath, selectionText);
+        if (written && written.err === 0) return selectionFilePath;
       }
-
-      const selectionFilePath = `${selectionDirectory}/random-marker-folder-selection.json`;
-      const written = fs.writeFile(selectionFilePath, selectionText);
-      return written && written.err === 0 ? selectionFilePath : "";
+      return "";
     }
 
     randomMarkerInsertRunButton.addEventListener("click", () => {
