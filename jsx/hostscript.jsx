@@ -562,14 +562,6 @@ function getSceneKeeperPreviewCacheFolders() {
         folders.push(new Folder(Folder.userData.fsName + "/CEP Tool/preview-cache"));
     } catch (primaryCacheError) {}
     try {
-        var temporaryFolder = new Folder(Folder.temp.fsName + "/SceneKeeper/preview-cache");
-        var duplicateTemporary = false;
-        for (var temporaryIndex = 0; temporaryIndex < folders.length; temporaryIndex++) {
-            if (folders[temporaryIndex].fsName === temporaryFolder.fsName) duplicateTemporary = true;
-        }
-        if (!duplicateTemporary) folders.push(temporaryFolder);
-    } catch (temporaryCacheError) {}
-    try {
         var documentsFolder = sceneKeeperDocumentsDataFolder();
         if (documentsFolder) {
             var documentsCache = new Folder(documentsFolder.fsName + "/preview-cache");
@@ -580,12 +572,20 @@ function getSceneKeeperPreviewCacheFolders() {
             if (!duplicate) folders.push(documentsCache);
         }
     } catch (documentsCacheError) {}
+    try {
+        var temporaryFolder = new Folder(Folder.temp.fsName + "/SceneKeeper/preview-cache");
+        var duplicateTemporary = false;
+        for (var temporaryIndex = 0; temporaryIndex < folders.length; temporaryIndex++) {
+            if (folders[temporaryIndex].fsName === temporaryFolder.fsName) duplicateTemporary = true;
+        }
+        if (!duplicateTemporary) folders.push(temporaryFolder);
+    } catch (temporaryCacheError) {}
     return folders;
 }
 
 function getSceneKeeperPreviewCacheDirectory() {
     var folders = getSceneKeeperPreviewCacheFolders();
-    for (var i = folders.length - 1; i >= 0; i--) {
+    for (var i = 0; i < folders.length; i++) {
         if (sceneEnsurePreviewFolder(folders[i].parent) && sceneEnsurePreviewFolder(folders[i]) && sceneKeeperFolderIsWritable(folders[i])) {
             return folders[i].fsName.replace(/\\/g, "/");
         }

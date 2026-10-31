@@ -29,7 +29,8 @@
     ],
     "1.0.29": ["The full “by morley.ae” credit now links to TikTok."],
     "1.0.30": ["The Random Clips Between Markers button now matches the height of the other clip buttons."],
-    "1.0.31": ["Fixed saved clip previews when the default cache folder is missing or cannot be written; SceneKeeper can now use a writable fallback folder."]
+    "1.0.31": ["Fixed saved clip previews when the default cache folder is missing or cannot be written; SceneKeeper can now use a writable fallback folder."],
+    "1.0.32": ["After Effects now prepares and checks the preview cache folder before creating saved clip previews, with fallback locations if needed."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -341,6 +342,7 @@
         "Success and error messages slide in briefly, and the clip action buttons take up less space.",
         "The footer links to GitHub releases and the creator’s TikTok profile.",
         "Restarting the extension avoids creating another backup within 10 minutes.",
+        "Saved clip previews use writable fallback folders if the default cache location is unavailable.",
         "This short What’s New summary appears after an update."
       ];
     }
