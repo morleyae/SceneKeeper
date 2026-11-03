@@ -1203,6 +1203,8 @@
     }
 
     function getClipFootageName(clip) {
+      const customName = String(clip && clip.footageMetadata && clip.footageMetadata.displayName || "").trim();
+      if (customName) return customName;
       const sourcePath = String(clip && clip.sourcePath || "")
         .trim()
         .replace(/\\/g, "/")
@@ -1764,10 +1766,97 @@
     }
 
     const storedPreviewQueue = [];
+    const maxStoredPreviewDurationSeconds = 10;
     const permanentlyDeletedPreviewKeys = new Set();
     let storedPreviewConversionActive = false;
     let storedPreviewCacheDirectory = "";
     let storedPreviewCacheDirectoryHostVerified = false;
+    const storedPreviewRateStorageKey = "SceneKeeper.previewConversionMsPerSecond";
+    let storedPreviewAverageMsPerSourceSecond = 1800;
+    let activeStoredPreviewJob = null;
+    let storedPreviewEtaTimer = null;
+
+    try {
+      const savedRate = Number(window.localStorage.getItem(storedPreviewRateStorageKey));
+      if (Number.isFinite(savedRate) && savedRate >= 500 && savedRate <= 10000) {
+        storedPreviewAverageMsPerSourceSecond = savedRate;
+      }
+    } catch (error) {}
+
+    function getStoredPreviewEstimateMs(record) {
+      const sourceDuration = Math.max(0.5, Math.min(
+        maxStoredPreviewDurationSeconds,
+        Number(record.sourceOut) - Number(record.sourceIn) || maxStoredPreviewDurationSeconds
+      ));
+      return Math.max(8000, Math.min(120000, 4000 + sourceDuration * storedPreviewAverageMsPerSourceSecond));
+    }
+
+    function sendStoredPreviewEstimate(job, milliseconds, queued) {
+      if (typeof job.progressCallback !== "function") return;
+      const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+      job.progressCallback({
+        remainingSeconds: seconds,
+        queued: Boolean(queued),
+        takingLonger: milliseconds <= 0
+      });
+    }
+
+    function formatStoredPreviewEstimate(estimate) {
+      if (estimate.takingLonger) return "Still creating the preview…";
+      const minutes = Math.floor(estimate.remainingSeconds / 60);
+      const seconds = estimate.remainingSeconds % 60;
+      const time = minutes ? `${minutes}m ${String(seconds).padStart(2, "0")}s` : `${seconds}s`;
+      return estimate.queued
+        ? `Preview queued · about ${time} remaining…`
+        : `Creating a small saved preview · about ${time} remaining…`;
+    }
+
+    function updateStoredPreviewEstimates() {
+      let remainingBeforeQueue = 0;
+      if (activeStoredPreviewJob) {
+        const elapsed = Date.now() - activeStoredPreviewJob.startedAt;
+        remainingBeforeQueue = Math.max(0, activeStoredPreviewJob.estimatedDurationMs - elapsed);
+        sendStoredPreviewEstimate(activeStoredPreviewJob, remainingBeforeQueue, false);
+      }
+      storedPreviewQueue.forEach((job) => {
+        const totalEstimate = remainingBeforeQueue + getStoredPreviewEstimateMs(job.record);
+        sendStoredPreviewEstimate(job, totalEstimate, true);
+        remainingBeforeQueue = totalEstimate;
+      });
+    }
+
+    function startStoredPreviewEstimate(job) {
+      activeStoredPreviewJob = job;
+      job.startedAt = Date.now();
+      job.estimatedDurationMs = getStoredPreviewEstimateMs(job.record);
+      updateStoredPreviewEstimates();
+      if (!storedPreviewEtaTimer) {
+        storedPreviewEtaTimer = window.setInterval(updateStoredPreviewEstimates, 1000);
+      }
+    }
+
+    function finishStoredPreviewEstimate(job, succeeded) {
+      if (job.startedAt && succeeded) {
+        const elapsed = Date.now() - job.startedAt;
+        const sourceDuration = Math.max(0.5, Math.min(
+          maxStoredPreviewDurationSeconds,
+          Number(job.record.sourceOut) - Number(job.record.sourceIn) || maxStoredPreviewDurationSeconds
+        ));
+        if (elapsed >= 1000 && elapsed < 45000) {
+          const sample = Math.max(500, Math.min(10000, (elapsed - 2500) / sourceDuration));
+          storedPreviewAverageMsPerSourceSecond = storedPreviewAverageMsPerSourceSecond * 0.65 + sample * 0.35;
+          try {
+            window.localStorage.setItem(storedPreviewRateStorageKey, String(Math.round(storedPreviewAverageMsPerSourceSecond)));
+          } catch (error) {}
+        }
+      }
+      if (activeStoredPreviewJob === job) activeStoredPreviewJob = null;
+      if (!activeStoredPreviewJob && !storedPreviewQueue.length && storedPreviewEtaTimer) {
+        window.clearInterval(storedPreviewEtaTimer);
+        storedPreviewEtaTimer = null;
+      }
+      updateStoredPreviewEstimates();
+    }
 
     function getStoredPreviewIdentity(record) {
       return `${record.sourcePath}|${record.sourceIn}|${record.sourceOut}`;
@@ -1783,7 +1872,7 @@
       userDataPath = userDataPath.replace(/^\/([A-Za-z]:\/)/, "$1").replace(/\/$/, "");
       const cacheDirectory = directoryOverride || storedPreviewCacheDirectory || (userDataPath + "/CEP Tool/preview-cache");
       const clipDuration = Math.max(0, Number(record.sourceOut) - Number(record.sourceIn));
-      const cacheVersion = requestedVersion || (clipDuration > 15 ? "small-h264-v3-15s" : "small-h264-v2");
+      const cacheVersion = requestedVersion || (clipDuration > maxStoredPreviewDurationSeconds ? "small-h264-v4-10s" : "small-h264-v2");
       const cacheKey = `${cacheVersion}|${record.sourcePath}|${record.sourceIn}|${record.sourceOut}`;
       let hash = 2166136261;
       for (let index = 0; index < cacheKey.length; index++) {
@@ -1797,7 +1886,7 @@
       if (!fs || typeof fs.stat !== "function" || typeof fs.deleteFile !== "function") {
         return "CEP file APIs are unavailable; preview files could not be removed.";
       }
-      const cacheVersions = ["small-h264-v1", "small-h264-v2", "small-h264-v3-15s"];
+      const cacheVersions = ["small-h264-v1", "small-h264-v2", "small-h264-v3-15s", "small-h264-v4-10s"];
       const remainingCacheKeys = new Set();
       const ignoredIdentities = new Set(
         (ignoredFavoriteRecords || []).map((record) => getStoredPreviewIdentity(record))
@@ -1889,7 +1978,15 @@
     function getCachedStoredPreviewPath(record) {
       try {
         const path = getStoredPreviewPath(record);
-        return hasStoredPreview(path) ? path : "";
+        if (hasStoredPreview(path)) return path;
+        if (record && record.sourceMissing) {
+          const legacyVersions = ["small-h264-v3-15s", "small-h264-v2", "small-h264-v1"];
+          for (let index = 0; index < legacyVersions.length; index++) {
+            const legacyPath = getStoredPreviewPath(record, legacyVersions[index]);
+            if (hasStoredPreview(legacyPath)) return legacyPath;
+          }
+        }
+        return "";
       } catch (error) {
         return "";
       }
@@ -1905,6 +2002,7 @@
           errorMessage = `Could not remove saved preview: ${previewPath}`;
         }
       }
+      finishStoredPreviewEstimate(job, Boolean(path));
       try {
         job.callback(path, errorMessage);
       } finally {
@@ -1916,7 +2014,7 @@
     function buildStoredPreviewConverters(job) {
       const sourcePath = String(job.record.sourcePath || "");
       const start = String(Math.max(0, Number(job.record.sourceIn) || 0));
-      const duration = String(Math.max(0.04, Math.min(15, Number(job.record.sourceOut) - Number(job.record.sourceIn))));
+      const duration = String(Math.max(0.04, Math.min(maxStoredPreviewDurationSeconds, Number(job.record.sourceOut) - Number(job.record.sourceIn))));
       const args = [
         "-y", "-ss", start, "-i", sourcePath, "-t", duration,
         "-vf", "scale=480:480:force_original_aspect_ratio=decrease:force_divisible_by=2,fps=15",
@@ -1926,12 +2024,13 @@
       ];
       const isWindows = /Windows/i.test(navigator.userAgent || "");
       if (isWindows) {
-        const converters = [
+        const systemConverters = [
           { command: "ffmpeg.exe", args },
           { command: "C:\\ffmpeg\\bin\\ffmpeg.exe", args },
           { command: "C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe", args },
           { command: "C:\\Program Files (x86)\\ffmpeg\\bin\\ffmpeg.exe", args }
         ];
+        const powershellConverters = [];
         const cep = window.__adobe_cep__;
         if (cep && typeof cep.getSystemPath === "function") {
           const extensionPath = decodeURI(cep.getSystemPath("extension") || "")
@@ -1961,10 +2060,13 @@
               `${windowsRoot}\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe`,
               `${windowsRoot}\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe`,
               "powershell.exe"
-            ].forEach((command) => converters.push({ command, args: helperArgs }));
+            ].forEach((command) => powershellConverters.push({ command, args: helperArgs, isPowerShell: true }));
           }
         }
-        return converters;
+        powershellConverters.forEach((candidate) => {
+          candidate.fallbackIndex = powershellConverters.length;
+        });
+        return powershellConverters.concat(systemConverters);
       }
 
       return [
@@ -2033,6 +2135,7 @@
 
       const candidates = buildStoredPreviewConverters(job);
       storedPreviewConversionActive = true;
+      startStoredPreviewEstimate(job);
       const launchFailures = [];
       const tryCandidate = (index, lastError) => {
         if (index >= candidates.length) {
@@ -2057,18 +2160,34 @@
             converterError += String(output || "");
           });
         }
+        let candidateFinished = false;
+        const failCandidate = (message) => {
+          if (candidateFinished) return;
+          candidateFinished = true;
+          if (candidate.isPowerShell) {
+            if (candidate.fallbackIndex < candidates.length) {
+              tryCandidate(candidate.fallbackIndex, message);
+            } else {
+              finishStoredPreviewJob(job, "", message);
+            }
+          } else {
+            tryCandidate(index + 1, message);
+          }
+        };
         const poll = () => {
+          if (candidateFinished) return;
           const state = processApi.isRunning(launched.data);
           if (!state || state.err !== 0) {
-            finishStoredPreviewJob(job, "", "Could not check preview conversion status.");
+            failCandidate("Could not check preview conversion status.");
           } else if (state.data === true) {
             window.setTimeout(poll, 250);
           } else if (hasStoredPreview(job.outputPath)) {
+            candidateFinished = true;
             finishStoredPreviewJob(job, job.outputPath, "");
           } else {
             const details = converterError.trim().slice(-400);
             const failure = `${candidate.command} could not convert this clip${details ? `: ${details}` : "."}`;
-            tryCandidate(index + 1, failure);
+            failCandidate(failure);
           }
         };
         window.setTimeout(poll, 250);
@@ -2076,7 +2195,7 @@
       tryCandidate(0, "No video converter is available.");
     }
 
-    function requestStoredPreview(record, callback) {
+    function requestStoredPreview(record, callback, progressCallback) {
       permanentlyDeletedPreviewKeys.delete(getStoredPreviewIdentity(record));
       let outputPath;
       try {
@@ -2085,11 +2204,19 @@
         callback("", error.message);
         return;
       }
+      if (record && record.sourceMissing) {
+        const legacyPreviewPath = getCachedStoredPreviewPath(record);
+        if (legacyPreviewPath) {
+          callback(legacyPreviewPath, "");
+          return;
+        }
+      }
       if (hasStoredPreview(outputPath)) {
         callback(outputPath, "");
         return;
       }
-      storedPreviewQueue.push({ record, outputPath, callback });
+      storedPreviewQueue.push({ record, outputPath, callback, progressCallback });
+      updateStoredPreviewEstimates();
       processStoredPreviewQueue();
     }
 
@@ -2165,7 +2292,7 @@
           ? 0
           : Math.min(start, lastFrame);
         favoritePreviewRange.end = favoritePreviewVideo.dataset.storedPreview === "true"
-          ? Math.min(favoritePreviewVideo.duration, 15)
+          ? Math.min(favoritePreviewVideo.duration, maxStoredPreviewDurationSeconds)
           : Math.min(end, favoritePreviewVideo.duration);
         favoritePreviewDuration.textContent = formatTimestamp(favoritePreviewRange.end - favoritePreviewRange.start);
         favoritePreviewVideo.currentTime = favoritePreviewRange.start;
@@ -2232,6 +2359,10 @@
             favoritePreviewVideo.onerror = showStoredPreviewError;
             favoritePreviewVideo.src = localFileUrl(previewPath);
             favoritePreviewVideo.load();
+          }, (estimate) => {
+            if (request !== favoritePreviewRequest) return;
+            favoritePreviewStatus.textContent = estimate.queued ? "Queued" : "Saving preview";
+            favoritePreviewMessage.textContent = formatStoredPreviewEstimate(estimate);
           });
         }
       };
@@ -2362,7 +2493,7 @@
 
       const isBackgroundLoad = /^(listClipFavorites|listClipFavoriteFootageStatus|listClipFolders|getClipSettings|getSceneKeeperQuickSaveStatus|getRandomMarkerSkipSuggestions|getRandomMarkerNames|getSelectedRandomMarkerSlots|createSceneKeeperBackup)\(/.test(scriptCall);
       if (!isBackgroundLoad) setResult("Working...", "");
-      const libraryAction = /^(createClipFolder|moveClipFolder|renameClipFolder|deleteClipFolder|assignClipFavoriteFolder|saveSelectedClipFavorite|quickSaveSelectedClipsToFolder|confirmClipFavoriteReplacement|renameClipFavorite|updateClipFavorite|reorderClipFavorites|reorderClipFolders|reorderClipLibraryItems|deleteClipFavorite|deleteClipFavoriteFootage|restoreClipTrashItem|relinkClipFavoriteFootage|importClipFavorites|resolveClipFavoriteImport)\(/.test(scriptCall);
+      const libraryAction = /^(createClipFolder|moveClipFolder|renameClipFolder|renameClipFavoriteFootage|deleteClipFolder|assignClipFavoriteFolder|saveSelectedClipFavorite|quickSaveSelectedClipsToFolder|confirmClipFavoriteReplacement|renameClipFavorite|updateClipFavorite|reorderClipFavorites|reorderClipFolders|reorderClipLibraryItems|deleteClipFavorite|deleteClipFavoriteFootage|restoreClipTrashItem|relinkClipFavoriteFootage|importClipFavorites|resolveClipFavoriteImport)\(/.test(scriptCall);
       const timelineAction = /^(insertClipFavorite|insertClipFavoriteIntoSelectedPrecomp|insertRandomClipFavoriteForSelectedFootage|insertRandomClipsBetweenMarkers|replaceRandomMarkerClips|replaceSelectedClipFromFolders|quickReplaceSelectedClip|prepareSelectedClipReplaceSlots|deleteRandomMarkerPrecomps)\(/.test(scriptCall);
       const encodedCommand = JSON.stringify(encodeURIComponent(scriptCall));
       const hostCall = libraryAction
@@ -2582,7 +2713,7 @@
 
     function openRenameDialog(target) {
       pendingRenameTarget = target;
-      renameDialogTitle.textContent = target.type === "folder" ? "Rename Folder" : "Rename Clip";
+      renameDialogTitle.textContent = target.type === "folder" ? "Rename Folder" : (target.type === "footage" ? "Rename Footage" : "Rename Clip");
       renameDialogInput.value = target.name;
       renameDialog.hidden = false;
       renameDialogInput.focus();
@@ -2601,6 +2732,16 @@
           pendingRenameTarget = null;
           setResult(response, "success");
           refreshFavoriteFolders();
+        });
+        return;
+      }
+      if (target.type === "footage") {
+        const encodedPath = JSON.stringify(encodeURIComponent(target.sourcePath));
+        callAE(`renameClipFavoriteFootage(${encodedPath}, ${encodedName})`, "", (response) => {
+          renameDialog.hidden = true;
+          pendingRenameTarget = null;
+          setResult(response, "success");
+          refreshFavorites(false);
         });
         return;
       }
@@ -3553,6 +3694,9 @@
             video.addEventListener("error", showStoredPreviewError, { once: true });
             video.src = localFileUrl(previewPath);
             video.load();
+          }, (estimate) => {
+            if (!video.isConnected) return;
+            placeholder.textContent = formatStoredPreviewEstimate(estimate);
           });
         }
       };
@@ -3741,7 +3885,8 @@
           const clipDragImage = createClipDragImage(entry.name);
           button.addEventListener("dragstart", (event) => {
             draggedClipOrderId = "";
-            startLibraryItemDragPreview(button, event);
+            const isWindows = /Windows/i.test(navigator.userAgent || "");
+            if (!isWindows) startLibraryItemDragPreview(button, event);
             const selectedClipIndices = getSelectedLibraryEntries()
               .filter((selectedEntry) => selectedEntry.type === "clip")
               .map((selectedEntry) => selectedEntry.clip.storageIndex);
@@ -3752,7 +3897,12 @@
             event.dataTransfer.setData("text/plain", dragData);
             event.dataTransfer.effectAllowed = "copyMove";
             if (typeof event.dataTransfer.setDragImage === "function") {
-              if (clipDragImage.complete && clipDragImage.naturalWidth > 0) {
+              if (isWindows) {
+                const bounds = button.getBoundingClientRect();
+                event.dataTransfer.setDragImage(button,
+                  Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)),
+                  Math.max(0, Math.min(bounds.height, event.clientY - bounds.top)));
+              } else if (clipDragImage.complete && clipDragImage.naturalWidth > 0) {
                 event.dataTransfer.setDragImage(clipDragImage, 8, 12);
               } else {
                 const bounds = button.getBoundingClientRect();
@@ -4040,11 +4190,29 @@
       function addFootageGroupHeading(clip) {
         const group = document.createElement("div");
         group.className = "favorite-footage-group";
-        const heading = document.createElement("div");
+        const heading = document.createElement("button");
+        heading.type = "button";
         heading.className = "favorite-footage-group-heading";
-        heading.setAttribute("role", "presentation");
-        heading.textContent = getClipFootageName(clip);
+        const title = document.createElement("span");
+        title.className = "favorite-footage-group-title";
+        title.textContent = getClipFootageName(clip);
+        heading.appendChild(title);
+        const originalName = String(clip.footageMetadata && clip.footageMetadata.originalName || "").trim();
+        if (originalName && originalName !== getClipFootageName(clip)) {
+          const original = document.createElement("span");
+          original.className = "favorite-footage-original-name";
+          original.textContent = `Original: ${originalName}`;
+          heading.appendChild(original);
+        }
         heading.title = String(clip.sourcePath || clip.sourceName || "");
+        heading.addEventListener("click", (event) => openLibraryContextMenu(event, [
+          { label: "Reveal Footage", run: () => callAE(`revealClipFavoriteFootage(${clip.storageIndex})`, "") },
+          { label: "Rename Footage", run: () => openRenameDialog({
+            type: "footage",
+            sourcePath: clip.sourcePath,
+            name: getClipFootageName(clip)
+          }) }
+        ]));
         const items = document.createElement("div");
         items.className = "favorite-footage-group-items";
         group.appendChild(heading);
@@ -4906,6 +5074,7 @@
               clipId: fields.length >= 15 ? decodeURIComponent(fields[13]) : "",
               sourceWidth: fields.length >= 17 && fields[14] ? Number(decodeURIComponent(fields[14])) : NaN,
               sourceHeight: fields.length >= 17 && fields[15] ? Number(decodeURIComponent(fields[15])) : NaN,
+              footageMetadata: fields.length >= 19 && fields[16] ? JSON.parse(decodeURIComponent(fields[16])) : null,
               sortOrder: fields.length === 19 && fields[17] !== "" ? Number(decodeURIComponent(fields[17])) : null,
               sourceMissing: fields.length === 19
                 ? fields[18] === "1"

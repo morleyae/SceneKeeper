@@ -373,6 +373,7 @@ function decodeClipFavoriteRecords(contents) {
                     clipId: fields.length >= 14 ? decodeURIComponent(fields[13]) : "",
                     sourceWidth: fields.length >= 16 ? parseFloat(decodeURIComponent(fields[14])) : null,
                     sourceHeight: fields.length >= 16 ? parseFloat(decodeURIComponent(fields[15])) : null,
+                    footageMetadata: fields.length >= 17 ? parseClipFootageMetadata(decodeURIComponent(fields[16])) : null,
                     sortOrder: fields.length === 18 && decodeURIComponent(fields[17]) !== ""
                         ? parseInt(decodeURIComponent(fields[17]), 10)
                         : null
@@ -383,6 +384,15 @@ function decodeClipFavoriteRecords(contents) {
         }
     }
     return records;
+}
+
+function parseClipFootageMetadata(value) {
+    if (!value) return null;
+    try {
+        var metadata = JSON.parse(value);
+        if (metadata && typeof metadata === "object") return metadata;
+    } catch (e) {}
+    return null;
 }
 
 function normalizeClipFavoriteRecordNames(records, folders) {
@@ -742,7 +752,7 @@ function encodeClipFavoriteRecord(record) {
         encodeField(record.clipId || (record.clipId = getClipRecordId())) + "\t" +
         encodeField(record.sourceWidth === null || record.sourceWidth === undefined ? "" : record.sourceWidth.toString()) + "\t" +
         encodeField(record.sourceHeight === null || record.sourceHeight === undefined ? "" : record.sourceHeight.toString()) + "\t" +
-        encodeField("") + "\t" +
+        encodeField(record.footageMetadata ? JSON.stringify(record.footageMetadata) : "") + "\t" +
         encodeField(typeof record.sortOrder === "number" && !isNaN(record.sortOrder) ? record.sortOrder.toString() : "");
 }
 
@@ -2297,6 +2307,51 @@ function revealClipFavoriteFootage(index) {
     }
 }
 
+function renameClipFavoriteFootage(encodedSourcePath, encodedName) {
+    var sourcePath = decodeURIComponent(encodedSourcePath || "");
+    var name = decodeURIComponent(encodedName || "").replace(/^\s+|\s+$/g, "");
+    if (!sourcePath || !name) return "ERROR: Footage path and name are required.";
+    var records = readClipFavoriteRecords();
+    var matched = [];
+    var originalName = "";
+    var normalizedPath = sourcePath.replace(/\\/g, "/").toLowerCase();
+    for (var i = 0; i < records.length; i++) {
+        if (String(records[i].sourcePath || "").replace(/\\/g, "/").toLowerCase() !== normalizedPath) continue;
+        matched.push(records[i]);
+        var metadata = records[i].footageMetadata || {};
+        if (metadata.originalName) originalName = metadata.originalName;
+        else if (!originalName) {
+            var sourcePathParts = sourcePath.replace(/\\/g, "/").split("/");
+            originalName = records[i].sourceName || decodeURI(sourcePathParts[sourcePathParts.length - 1]);
+        }
+    }
+    if (!matched.length) return "ERROR: No saved clips use this footage.";
+    var projectFootage = null;
+    for (var itemIndex = 1; itemIndex <= app.project.numItems; itemIndex++) {
+        var item = app.project.item(itemIndex);
+        try {
+            if (item instanceof FootageItem && item.mainSource instanceof FileSource &&
+                String(item.mainSource.file.fsName).replace(/\\/g, "/").toLowerCase() === normalizedPath) {
+                projectFootage = item;
+                break;
+            }
+        } catch (e) {}
+    }
+    if (projectFootage) {
+        try { projectFootage.name = name; } catch (e) {
+            return "ERROR: Could not rename footage in the After Effects project: " + e.toString();
+        }
+    }
+    for (var recordIndex = 0; recordIndex < matched.length; recordIndex++) {
+        matched[recordIndex].footageMetadata = {
+            displayName: name,
+            originalName: originalName
+        };
+    }
+    if (!writeClipFavoriteRecords(records)) return "ERROR: Could not save the footage name.";
+    return "Renamed footage to “" + name + "”. Original name: “" + originalName + "”.";
+}
+
 function getNextClipFavoriteNameInFolder(records, folderId) {
     var nextClipNumber = 1;
     for (var i = 0; i < records.length; i++) {
@@ -2457,6 +2512,15 @@ function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, save
         sourceHeight: layer.source.height,
         clipId: getClipRecordId()
     };
+
+    for (var footageMetadataIndex = 0; footageMetadataIndex < records.length; footageMetadataIndex++) {
+        var savedFootageRecord = records[footageMetadataIndex];
+        if (String(savedFootageRecord.sourcePath || "").replace(/\\/g, "/").toLowerCase() ===
+            String(newRecord.sourcePath || "").replace(/\\/g, "/").toLowerCase() && savedFootageRecord.footageMetadata) {
+            newRecord.footageMetadata = savedFootageRecord.footageMetadata;
+            break;
+        }
+    }
 
     pendingClipFavoriteReplacement = null;
     var matchingDuplicateIndex = -1;
