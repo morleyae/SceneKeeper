@@ -1,4 +1,4 @@
 window.SceneKeeperUpdateConfig = {
-  currentVersion: "1.0.42",
+  currentVersion: "1.0.43",
   repository: "morleyae/SceneKeeper"
 };

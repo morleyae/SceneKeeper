@@ -77,10 +77,10 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      min-height: 24px;
-      height: 24px;
+      min-height: 18px;
+      height: 18px;
       margin: 0;
-      padding: 2px 9px;
+      padding: 1px 9px;
       background: var(--background);
       color: var(--muted);
       font-size: 9px;
@@ -260,12 +260,17 @@
       font-weight: 700;
     }
 
-    .gear-toggle { font-size: 18px; }
+    .gear-toggle {
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+    }
 
     .gear-toggle svg {
       display: block;
       width: 15px;
       height: 15px;
+      transform: translate(-0.3px, 0.3px);
       fill: none;
       stroke: currentColor;
       stroke-linecap: round;
@@ -2032,7 +2037,7 @@
       position: fixed;
       z-index: 90;
       right: 0;
-      bottom: 24px;
+      bottom: 18px;
       left: 0;
       box-sizing: border-box;
       padding: 4px 9px 0;
@@ -2042,13 +2047,13 @@
 
     #extra-clip-actions-toggle {
       display: flex;
-      width: max-content;
+      width: 100%;
       min-height: 20px;
       height: 20px;
       margin: 2px auto 0;
       padding: 1px 7px;
       border-color: transparent;
-      background: transparent;
+      background: rgba(255,255,255,0.025);
       color: var(--muted);
       font-size: 9px;
       line-height: 1;
@@ -2057,7 +2062,7 @@
     #extra-clip-actions-toggle:hover,
     #extra-clip-actions-toggle:focus-visible {
       border-color: transparent;
-      background: transparent;
+      background: rgba(255,255,255,0.06);
       color: var(--text);
     }
 

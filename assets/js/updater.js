@@ -43,7 +43,8 @@
     "1.0.38": ["HEVC/H.265 previews on Windows now recover from incomplete FFmpeg installs and include the supporting files needed for conversion."],
     "1.0.39": ["Windows HEVC previews now find PowerShell through the Windows system folders, even when After Effects does not inherit the normal Windows search path."],
     "1.0.41": ["After an update installs, close and reopen the SceneKeeper panel to load the new version. After Effects does not need to restart."],
-    "1.0.42": ["The More actions button is easier to tap, the clip controls sit closer to the panel footer, and the Settings gear icon is clearer."]
+    "1.0.42": ["The More actions button is easier to tap, the clip controls sit closer to the panel footer, and the Settings gear icon is clearer."],
+    "1.0.43": ["The Settings gear is centered. The clip controls sit lower, and the More actions bar uses the full row instead of leaving empty space at both sides."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
