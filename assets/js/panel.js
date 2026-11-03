@@ -1941,17 +1941,27 @@
             .replace(/\\$/, "");
           if (extensionPath) {
             const helperPath = `${extensionPath}\\scripts\\transcode-preview-windows.ps1`;
-            converters.push({
-              command: "powershell.exe",
-              args: [
-                "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
-                "-ExecutionPolicy", "Bypass", "-File", helperPath,
-                "-SourcePath", sourcePath,
-                "-StartSeconds", start,
-                "-DurationSeconds", duration,
-                "-OutputPath", job.outputPath
-              ]
-            });
+            const helperArgs = [
+              "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden",
+              "-ExecutionPolicy", "Bypass", "-File", helperPath,
+              "-SourcePath", sourcePath,
+              "-StartSeconds", start,
+              "-DurationSeconds", duration,
+              "-OutputPath", job.outputPath
+            ];
+            let windowsRoot = "C:\\Windows";
+            try {
+              if (typeof process !== "undefined" && process.env) {
+                windowsRoot = process.env.WINDIR || process.env.SystemRoot || windowsRoot;
+              }
+            } catch (error) {}
+            windowsRoot = String(windowsRoot).replace(/[\\/]+$/, "");
+            [
+              `${windowsRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
+              `${windowsRoot}\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe`,
+              `${windowsRoot}\\Sysnative\\WindowsPowerShell\\v1.0\\powershell.exe`,
+              "powershell.exe"
+            ].forEach((command) => converters.push({ command, args: helperArgs }));
           }
         }
         return converters;
@@ -2023,15 +2033,22 @@
 
       const candidates = buildStoredPreviewConverters(job);
       storedPreviewConversionActive = true;
+      const launchFailures = [];
       const tryCandidate = (index, lastError) => {
         if (index >= candidates.length) {
-          finishStoredPreviewJob(job, "", lastError);
+          const launchDetails = launchFailures.slice(-4).join(" ");
+          finishStoredPreviewJob(job, "", launchDetails || lastError);
           return;
         }
         const candidate = candidates[index];
         const launched = processApi.createProcess(candidate.command, ...candidate.args);
         if (!launched || launched.err !== 0 || !launched.data) {
-          tryCandidate(index + 1, `Could not start ${candidate.command}.`);
+          const processError = launched && launched.err !== undefined && launched.err !== 0
+            ? ` (CEP process error ${launched.err})`
+            : "";
+          const launchFailure = `Could not start ${candidate.command}${processError}.`;
+          launchFailures.push(launchFailure);
+          tryCandidate(index + 1, launchFailure);
           return;
         }
         let converterError = "";
