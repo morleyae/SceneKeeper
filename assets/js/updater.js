@@ -14,13 +14,13 @@
   const NO_HISTORY_VERSION_FLOOR = "1.0.16";
   const RELEASE_NOTES = {
     "1.0.17": ["Fixed backups and marker-based clip insertion on systems with older After Effects scripting support."],
-    "1.0.18": ["Update messages now explain when to restart After Effects."],
+    "1.0.18": ["Update messages now explain how to load a newly installed version."],
     "1.0.19": ["Update status now changes when the download and installer start."],
     "1.0.20": ["Made the four clip action buttons smaller and consistent."],
     "1.0.21": ["Added clearer macOS update confirmations and error details."],
     "1.0.22": ["Success and error messages now slide in briefly instead of staying in the panel."],
     "1.0.23": ["Improved the macOS updater so it can keep running while After Effects closes."],
-    "1.0.24": ["On macOS, updates can install while After Effects is open; restart AE afterward to load them."],
+    "1.0.24": ["On macOS, updates can install while After Effects is open."],
     "1.0.25": ["Linked the version number to GitHub releases and the creator name to TikTok."],
     "1.0.26": ["Added this plain-language update summary after installing a new version."],
     "1.0.27": ["The Settings heading now stays at the top, with the close button out of its way."],
@@ -41,7 +41,8 @@
     "1.0.36": ["On macOS, license checks can use the system HTTPS client as a fallback when After Effects’ embedded network connection times out."],
     "1.0.37": ["On macOS, the license request now uses one bounded system-curl attempt at a time, so a blocked connection cannot keep the panel retrying for minutes."],
     "1.0.38": ["HEVC/H.265 previews on Windows now recover from incomplete FFmpeg installs and include the supporting files needed for conversion."],
-    "1.0.39": ["Windows HEVC previews now find PowerShell through the Windows system folders, even when After Effects does not inherit the normal Windows search path."]
+    "1.0.39": ["Windows HEVC previews now find PowerShell through the Windows system folders, even when After Effects does not inherit the normal Windows search path."],
+    "1.0.41": ["After an update installs, close and reopen the SceneKeeper panel to load the new version. After Effects does not need to restart."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -244,8 +245,8 @@
 
   function showNotice(version) {
     if (!notice) return;
-    if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs; restart After Effects after the installation confirmation.`;
-    else notice.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs; restart After Effects after the installation confirmation.`;
+    if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs; close and reopen the SceneKeeper panel after the installation confirmation. After Effects does not need to restart.`;
+    else notice.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs; close and reopen the SceneKeeper panel after the installation confirmation. After Effects does not need to restart.`;
     if (retryUpdateButton) {
       retryUpdateButton.hidden = false;
       retryUpdateButton.disabled = false;
@@ -257,7 +258,7 @@
   function showInstallerStarted(version) {
     showNotice(version);
     if (noticeMessage) {
-      noticeMessage.textContent = `Installing ${version} while After Effects stays open. Restart AE after the installation confirmation appears.`;
+      noticeMessage.textContent = `Installing ${version} while After Effects stays open. Close and reopen the SceneKeeper panel after the installation confirmation to load the update.`;
     }
     if (retryUpdateButton) {
       retryUpdateButton.disabled = true;
@@ -317,7 +318,7 @@
     }
     scheduleInstall(archivePath, version, (installError) => {
       if (installError) {
-        setNoticeMessage(`Could not start the installer: ${installError.message}. Close After Effects and retry.`);
+        setNoticeMessage(`Could not start the installer: ${installError.message}. Close and reopen the SceneKeeper panel, then retry.`);
         if (retryUpdateButton) {
           retryUpdateButton.disabled = false;
           retryUpdateButton.textContent = "Retry Update Install";
@@ -389,8 +390,8 @@
     if (!previousVersion) {
       notes = [
         "Backups and Random Clips Between Markers now work on more After Effects setups.",
-        "Update progress, restart instructions, and installation errors are clearer.",
-        "Updates can install while After Effects stays open; restart AE afterward.",
+        "Update progress and installation errors are clearer.",
+        "Updates install while After Effects stays open. Close and reopen the SceneKeeper panel to load one; restarting After Effects is not needed.",
         "Success and error messages slide in briefly, and the clip action buttons take up less space.",
         "The footer links to GitHub releases and the creator’s TikTok profile.",
         "Restarting the extension avoids creating another backup within 10 minutes.",
@@ -487,7 +488,7 @@
         scheduleNextCheck(CHECK_INTERVAL_MS);
         return;
       }
-      showUpdateProblem(`SceneKeeper ${release.tag_name} was found and is downloading. It will install in the background; restart After Effects after the installation confirmation.`);
+      showUpdateProblem(`SceneKeeper ${release.tag_name} was found and is downloading. It will install in the background; close and reopen the SceneKeeper panel after installation to load it. After Effects does not need to restart.`);
       const asset = (release.assets || []).find((item) => item.name === `SceneKeeper-${release.tag_name}.zip`);
       if (!asset || !asset.browser_download_url) {
         showUpdateProblem(`SceneKeeper ${release.tag_name} is available, but its download package could not be found. Please contact support.`);

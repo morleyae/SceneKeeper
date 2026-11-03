@@ -19,15 +19,15 @@ APPLESCRIPT
 fail() {
   local message="$1"
   echo "SceneKeeper update failed: $message"
-  show_dialog "SceneKeeper ${VERSION:-update} could not be installed. Close After Effects and check that your account can modify:\n${TARGET:-the SceneKeeper extension folder}\n\nDetails: ${message}\n\nLog: ${LOG_FILE}" "SceneKeeper update failed"
+  show_dialog "SceneKeeper ${VERSION:-update} could not be installed. Close and reopen the SceneKeeper panel, then retry. Also check that your account can modify:\n${TARGET:-the SceneKeeper extension folder}\n\nDetails: ${message}\n\nLog: ${LOG_FILE}" "SceneKeeper update failed"
   exit 10
 }
 
 [[ -n "$ARCHIVE" && -n "$TARGET" && -f "$ARCHIVE" ]] || fail "The update archive or install path is missing."
 
 # macOS permits replacing an extension directory while AE is open. The
-# currently loaded panel keeps running from memory; the new files are used
-# after AE restarts.
+# currently loaded panel keeps running from memory; close and reopen the panel
+# after installation to load the new files. After Effects does not need to restart.
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/scenekeeper-update.XXXXXX")" || fail "Could not create a temporary install folder."
 unzip -q "$ARCHIVE" -d "$WORK_DIR" || { rm -rf "$WORK_DIR"; fail "Could not extract the update archive."; }
@@ -49,4 +49,4 @@ if ! mv "$PAYLOAD" "$TARGET"; then
 fi
 
 rm -rf "$BACKUP" "$WORK_DIR" "$ARCHIVE" "$STATE_FILE"
-show_dialog "SceneKeeper ${VERSION} is installed. Reopen After Effects to use it." "SceneKeeper updated"
+show_dialog "SceneKeeper ${VERSION} is installed. Close and reopen the SceneKeeper panel to use the update. After Effects does not need to restart." "SceneKeeper updated"
