@@ -44,7 +44,11 @@
     "1.0.39": ["Windows HEVC previews now find PowerShell through the Windows system folders, even when After Effects does not inherit the normal Windows search path."],
     "1.0.41": ["After an update installs, close and reopen the SceneKeeper panel to load the new version. After Effects does not need to restart."],
     "1.0.42": ["The More actions button is easier to tap, the clip controls sit closer to the panel footer, and the Settings gear icon is clearer."],
-    "1.0.43": ["The Settings gear is centered. The clip controls sit lower, and the More actions bar uses the full row instead of leaving empty space at both sides."]
+    "1.0.43": ["The Settings gear is centered. The clip controls sit lower, and the More actions bar uses the full row instead of leaving empty space at both sides."],
+    "1.0.44": [
+      "Import and Export now start from a full panel page with clear choices.",
+      "Update completion and errors appear in the SceneKeeper panel instead of system popups; after installation, reopen the panel to load the update."
+    ]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -203,6 +207,10 @@
 
     const helperPath = `${updateDirectory}/apply-update-${isWindows ? "windows.ps1" : "macos.sh"}`;
     const statePath = `${updateDirectory}/pending-update.json`;
+    const resultPath = `${statePath}.result`;
+    if (typeof fs.deleteFile === "function") {
+      try { fs.deleteFile(resultPath); } catch (error) {}
+    }
     const state = `${archivePath}\n${extensionPath}\n${version}\n`;
     if (!writeFile(helperPath, helperResult.data) || !writeFile(statePath, state)) {
       return callback(new Error("Could not prepare the automatic installer"));
@@ -247,8 +255,8 @@
 
   function showNotice(version) {
     if (!notice) return;
-    if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs; close and reopen the SceneKeeper panel after the installation confirmation. After Effects does not need to restart.`;
-    else notice.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs; close and reopen the SceneKeeper panel after the installation confirmation. After Effects does not need to restart.`;
+    if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs. This message will update when installation is complete.`;
+    else notice.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs. This message will update when installation is complete.`;
     if (retryUpdateButton) {
       retryUpdateButton.hidden = false;
       retryUpdateButton.disabled = false;
@@ -260,7 +268,7 @@
   function showInstallerStarted(version) {
     showNotice(version);
     if (noticeMessage) {
-      noticeMessage.textContent = `Installing ${version} while After Effects stays open. Close and reopen the SceneKeeper panel after the installation confirmation to load the update.`;
+      noticeMessage.textContent = `Installing ${version} while After Effects stays open. This message will update when it is installed.`;
     }
     if (retryUpdateButton) {
       retryUpdateButton.disabled = true;
@@ -273,6 +281,52 @@
     if (noticeMessage) noticeMessage.textContent = String(message || "");
     else notice.textContent = String(message || "");
     revealNotice();
+  }
+
+  function monitorInstallResult(version, startedAt) {
+    const cep = window.__adobe_cep__;
+    const fs = window.cep && window.cep.fs;
+    const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
+    const resultPath = `${userData}/SceneKeeper/updates/pending-update.json.result`;
+    const result = fs && typeof fs.readFile === "function" ? fs.readFile(resultPath) : null;
+    if (result && result.err === 0 && result.data) {
+      const lines = String(result.data).replace(/^\uFEFF/, "").split(/\r?\n/);
+      if (lines[0] === "INSTALLED") {
+        if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is installed. Please close and reopen the SceneKeeper panel to use the newly installed version.`;
+        else if (notice) notice.textContent = `SceneKeeper ${version} is installed. Please close and reopen the SceneKeeper panel to use the newly installed version.`;
+        if (retryUpdateButton) retryUpdateButton.hidden = true;
+        scheduledVersion = "";
+        revealNotice();
+        return;
+      }
+      if (lines[0] === "ERROR") {
+        const details = lines.slice(1).join(" ").trim();
+        setNoticeMessage(`SceneKeeper ${version} could not be installed${details ? `: ${details}` : ". Please try again."}`);
+        if (retryUpdateButton) {
+          retryUpdateButton.hidden = false;
+          retryUpdateButton.disabled = false;
+          retryUpdateButton.textContent = "Retry Update Install";
+        }
+        scheduledVersion = "";
+        return;
+      }
+    }
+
+    if (Date.now() - startedAt >= 5 * 60 * 1000) {
+      setNoticeMessage(`SceneKeeper ${version} installation could not be confirmed. You can retry the installation.`);
+      if (retryUpdateButton) {
+        retryUpdateButton.hidden = false;
+        retryUpdateButton.disabled = false;
+        retryUpdateButton.textContent = "Retry Update Install";
+      }
+      scheduledVersion = "";
+      return;
+    }
+    window.setTimeout(() => monitorInstallResult(version, startedAt), 1000);
+  }
+
+  function startInstallResultMonitor(version) {
+    monitorInstallResult(version, Date.now());
   }
 
   function showUpdateProblem(message) {
@@ -330,6 +384,7 @@
       setPendingUpdateVersion(version);
       scheduledVersion = version;
       showInstallerStarted(version);
+      startInstallResultMonitor(version);
     });
   }
 
@@ -393,7 +448,7 @@
       notes = [
         "Backups and Random Clips Between Markers now work on more After Effects setups.",
         "Update progress and installation errors are clearer.",
-        "Updates install while After Effects stays open. Close and reopen the SceneKeeper panel to load one; restarting After Effects is not needed.",
+        "Updates install while After Effects stays open. Once installation finishes, close and reopen the SceneKeeper panel to load the new version.",
         "Success and error messages slide in briefly, and the clip action buttons take up less space.",
         "The footer links to GitHub releases and the creator’s TikTok profile.",
         "Restarting the extension avoids creating another backup within 10 minutes.",
@@ -490,7 +545,7 @@
         scheduleNextCheck(CHECK_INTERVAL_MS);
         return;
       }
-      showUpdateProblem(`SceneKeeper ${release.tag_name} was found and is downloading. It will install in the background; close and reopen the SceneKeeper panel after installation to load it. After Effects does not need to restart.`);
+      showUpdateProblem(`SceneKeeper ${release.tag_name} was found and is downloading. The panel will tell you when it is installed and ready to use.`);
       const asset = (release.assets || []).find((item) => item.name === `SceneKeeper-${release.tag_name}.zip`);
       if (!asset || !asset.browser_download_url) {
         showUpdateProblem(`SceneKeeper ${release.tag_name} is available, but its download package could not be found. Please contact support.`);
@@ -526,6 +581,7 @@
           setPendingUpdateVersion(release.tag_name);
           scheduledVersion = release.tag_name;
           showInstallerStarted(release.tag_name);
+          startInstallResultMonitor(release.tag_name);
         });
       });
     });

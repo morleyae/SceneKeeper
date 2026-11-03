@@ -291,6 +291,24 @@
     </div>
   </div>
 
+  <div id="library-data-page" class="confirm-box panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="library-data-page-title" hidden>
+    <div class="confirm-box-content panel-fullscreen-content library-data-page-content">
+      <button id="library-data-page-close" class="settings-close" type="button" aria-label="Close Import / Export">×</button>
+      <h2 id="library-data-page-title" class="save-clip-dialog-title">Import / Export</h2>
+      <p class="library-data-page-description">Back up your SceneKeeper library or bring a library backup into this installation.</p>
+      <div class="library-data-options">
+        <button id="export-library-open" class="secondary library-data-option" type="button">
+          <strong>Export Library</strong>
+          <small>Save all or selected clips and folders to a backup file.</small>
+        </button>
+        <button id="import-library-open" class="secondary library-data-option" type="button">
+          <strong>Import Library</strong>
+          <small>Choose a SceneKeeper backup file to add its clips and folders.</small>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="section favorites-section">
     <div class="section-heading">
       <h1>SceneKeeper</h1>
@@ -389,13 +407,15 @@
           <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.5 5.5h5l1.7 2H17v8a1 1 0 0 1-1 1H4a1.5 1.5 0 0 1-1.5-1.5zM10 10v4m-2-2h4"/></svg>
         </button>
       </div>
-      <button id="extra-clip-actions-toggle" class="secondary" type="button" aria-expanded="false" aria-controls="extra-clip-actions">More actions <span aria-hidden="true">▾</span></button>
-      <div id="extra-clip-actions" class="extra-clip-actions" hidden>
-        <div class="clip-action-row">
-          <button id="replace-selected-clip-open" class="secondary" type="button">Replace Selected Clips</button>
-          <button id="quick-replace-selected-clip" class="secondary" type="button" title="Replace selected clip layers using clips from the same saved folder">Quick Replace</button>
+      <div class="more-actions-area">
+        <div id="extra-clip-actions" class="extra-clip-actions" hidden>
+          <div class="clip-action-row">
+            <button id="replace-selected-clip-open" class="secondary" type="button">Replace Selected Clips</button>
+            <button id="quick-replace-selected-clip" class="secondary" type="button" title="Replace selected clip layers using clips from the same saved folder">Quick Replace</button>
+          </div>
+          <button id="random-marker-insert-open" class="secondary" type="button">Random Clips Between Markers</button>
         </div>
-        <button id="random-marker-insert-open" class="secondary" type="button">Random Clips Between Markers</button>
+        <button id="extra-clip-actions-toggle" class="secondary" type="button" aria-expanded="false" aria-controls="extra-clip-actions">More actions <span aria-hidden="true">▾</span></button>
       </div>
     </div>
     <div id="random-marker-insert-dialog" class="confirm-box panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="random-marker-insert-title" hidden>

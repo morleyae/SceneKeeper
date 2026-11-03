@@ -37,6 +37,7 @@
         "missing-footage-modal": "#missing-footage-close",
         "help-modal": "#help-close",
         "settings-modal": "#settings-close",
+        "library-data-page": "#library-data-page-close",
         "export-data-confirmation": "#cancel-export-data-button",
         "random-marker-insert-dialog": "#random-marker-insert-cancel",
         "random-marker-replace-dialog": "#random-marker-replace-done",
@@ -163,6 +164,9 @@
     const randomMarkerDeleteConfirmationConfirmButton = document.getElementById("random-marker-delete-confirmation-confirm");
     const randomMarkerReplaceDoneButton = document.getElementById("random-marker-replace-done");
     const exportDataConfirmation = document.getElementById("export-data-confirmation");
+    const libraryDataPage = document.getElementById("library-data-page");
+    const exportLibraryOpenButton = document.getElementById("export-library-open");
+    const importLibraryOpenButton = document.getElementById("import-library-open");
     const exportFootageChoiceList = document.getElementById("export-footage-choice-list");
     const exportChoiceSearch = document.getElementById("export-choice-search");
     const exportSelectedFootageButton = document.getElementById("export-selected-footage-button");
@@ -4205,14 +4209,19 @@
           heading.appendChild(original);
         }
         heading.title = String(clip.sourcePath || clip.sourceName || "");
-        heading.addEventListener("click", (event) => openLibraryContextMenu(event, [
-          { label: "Reveal Footage", run: () => callAE(`revealClipFavoriteFootage(${clip.storageIndex})`, "") },
-          { label: "Rename Footage", run: () => openRenameDialog({
-            type: "footage",
-            sourcePath: clip.sourcePath,
-            name: getClipFootageName(clip)
-          }) }
-        ]));
+        const showFootageActions = (event) => {
+          event.stopPropagation();
+          openLibraryContextMenu(event, [
+            { label: "Reveal Footage", run: () => callAE(`revealClipFavoriteFootage(${clip.storageIndex})`, "") },
+            { label: "Rename Footage", run: () => openRenameDialog({
+              type: "footage",
+              sourcePath: clip.sourcePath,
+              name: getClipFootageName(clip)
+            }) }
+          ]);
+        };
+        heading.addEventListener("click", showFootageActions);
+        heading.addEventListener("contextmenu", showFootageActions);
         const items = document.createElement("div");
         items.className = "favorite-footage-group-items";
         group.appendChild(heading);
@@ -5477,10 +5486,38 @@
       );
     }
 
+    let extraClipActionsHideTimer = null;
+    let extraClipActionsFrame = null;
     extraClipActionsToggle.addEventListener("click", () => {
       const expanded = extraClipActionsToggle.getAttribute("aria-expanded") !== "true";
       extraClipActionsToggle.setAttribute("aria-expanded", String(expanded));
-      extraClipActions.hidden = !expanded;
+      if (extraClipActionsFrame !== null) {
+        window.cancelAnimationFrame(extraClipActionsFrame);
+        extraClipActionsFrame = null;
+      }
+      if (extraClipActionsHideTimer) {
+        window.clearTimeout(extraClipActionsHideTimer);
+        extraClipActionsHideTimer = null;
+      }
+      if (expanded) {
+        extraClipActions.hidden = false;
+        void extraClipActions.offsetHeight;
+        extraClipActionsFrame = window.requestAnimationFrame(() => {
+          if (extraClipActionsToggle.getAttribute("aria-expanded") === "true") {
+            extraClipActions.classList.add("is-open");
+          }
+          extraClipActionsFrame = null;
+        });
+        return;
+      }
+
+      extraClipActions.classList.remove("is-open");
+      extraClipActionsHideTimer = window.setTimeout(() => {
+        if (extraClipActionsToggle.getAttribute("aria-expanded") === "false") {
+          extraClipActions.hidden = true;
+        }
+        extraClipActionsHideTimer = null;
+      }, 190);
     });
 
     quickSaveSelectedClipsButton.addEventListener("click", () => {
@@ -6913,6 +6950,7 @@
     });
 
     function openExportDataDialog() {
+      libraryDataPage.hidden = true;
       exportChoiceSearchQuery = "";
       exportChoiceSearch.value = "";
       exportSelectedFootagePaths = selectedFootagePath ? [selectedFootagePath] : [];
@@ -6954,10 +6992,14 @@
 
     libraryDataToggle.addEventListener("click", (event) => {
       event.stopPropagation();
-      openLibraryContextMenu(event, [
-        { label: "Export Data", run: openExportDataDialog },
-        { label: "Import Data", run: importLibraryData }
-      ]);
+      libraryDataPage.hidden = false;
+      exportLibraryOpenButton.focus();
+    });
+
+    exportLibraryOpenButton.addEventListener("click", openExportDataDialog);
+    importLibraryOpenButton.addEventListener("click", () => {
+      libraryDataPage.hidden = true;
+      importLibraryData();
     });
 
     exportFootageModeButton.addEventListener("click", () => {

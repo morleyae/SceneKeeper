@@ -1004,6 +1004,43 @@
       padding: 0;
     }
 
+    .library-data-page-content.panel-fullscreen-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      overflow-y: auto;
+    }
+
+    .library-data-page-content .save-clip-dialog-title { margin-bottom: 0; }
+
+    .library-data-page-description {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .library-data-options {
+      display: grid;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .library-data-option {
+      display: flex;
+      min-height: 68px;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 4px;
+      margin: 0;
+      padding: 10px 12px;
+      text-align: left;
+    }
+
+    .library-data-option strong { font-size: 12px; }
+    .library-data-option small { color: var(--muted); font-size: 10px; font-weight: 400; }
+
     .export-choice-group-label {
       margin: 2px 0 0;
       color: var(--muted);
@@ -1999,7 +2036,7 @@
       grid-template-columns: repeat(4, minmax(0, 1fr));
       column-gap: 6px;
       align-items: center;
-      margin: 9px 0 6px;
+      margin: 6px 0 0;
     }
 
     .library-actions > button {
@@ -2014,6 +2051,10 @@
       line-height: 1;
     }
 
+    #undo-action-button svg {
+      transform: translate(-0.25px, -1.5px);
+    }
+
     .clip-action-row {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2026,7 +2067,7 @@
       min-width: 0;
       min-height: 32px;
       height: 32px;
-      margin-top: 4px;
+      margin-top: 0;
       padding: 4px 2px;
       font-size: 10px;
       line-height: 1.15;
@@ -2040,7 +2081,7 @@
       bottom: 18px;
       left: 0;
       box-sizing: border-box;
-      padding: 4px 9px 0;
+      padding: 6px 9px 0;
       border-top: 1px solid var(--border);
       background: var(--background);
     }
@@ -2048,9 +2089,11 @@
     #extra-clip-actions-toggle {
       display: flex;
       width: 100%;
+      align-items: center;
+      justify-content: center;
       min-height: 20px;
       height: 20px;
-      margin: 2px auto 0;
+      margin: 0;
       padding: 1px 7px;
       border-color: transparent;
       background: rgba(255,255,255,0.025);
@@ -2071,13 +2114,42 @@
     #extra-clip-actions-toggle span {
       display: inline-block;
       margin-left: 3px;
-      transition: transform 120ms ease;
+      transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
     }
 
     #extra-clip-actions-toggle[aria-expanded="true"] span { transform: rotate(180deg); }
 
+    .more-actions-area {
+      position: relative;
+      z-index: 1;
+      margin-top: 6px;
+    }
+
     .extra-clip-actions[hidden] { display: none; }
-    .extra-clip-actions { margin-top: 1px; }
+    .extra-clip-actions {
+      position: absolute;
+      z-index: 2;
+      right: 0;
+      bottom: calc(100% + 6px);
+      left: 0;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--background);
+      box-shadow: 0 5px 16px rgba(0,0,0,0.42);
+      opacity: 0;
+      transform: translateY(6px) scale(0.985);
+      transform-origin: bottom center;
+      pointer-events: none;
+      transition: opacity 150ms ease, transform 180ms cubic-bezier(0.2, 0.75, 0.25, 1);
+    }
+
+    .extra-clip-actions.is-open {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+
     .extra-clip-actions > #random-marker-insert-open { width: 100%; }
 
     .primary-clip-actions { margin: 0; }
@@ -2085,7 +2157,7 @@
     #random-marker-insert-open {
       min-height: 32px;
       height: 32px;
-      margin-top: 4px;
+      margin-top: 6px;
       padding: 4px 2px;
       font-size: 10px;
       line-height: 1.15;

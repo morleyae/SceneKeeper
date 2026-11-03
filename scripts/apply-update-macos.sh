@@ -8,18 +8,12 @@ ARCHIVE="$(sed -n '1p' "$STATE_FILE")"
 TARGET="$(sed -n '2p' "$STATE_FILE")"
 VERSION="$(sed -n '3p' "$STATE_FILE")"
 
-show_dialog() {
-  /usr/bin/osascript - "$1" "$2" <<'APPLESCRIPT' >/dev/null 2>&1 || true
-on run argv
-  display dialog (item 1 of argv) with title (item 2 of argv) buttons {"OK"} default button "OK"
-end run
-APPLESCRIPT
-}
+RESULT_FILE="${STATE_FILE}.result"
 
 fail() {
   local message="$1"
   echo "SceneKeeper update failed: $message"
-  show_dialog "SceneKeeper ${VERSION:-update} could not be installed. Close and reopen the SceneKeeper panel, then retry. Also check that your account can modify:\n${TARGET:-the SceneKeeper extension folder}\n\nDetails: ${message}\n\nLog: ${LOG_FILE}" "SceneKeeper update failed"
+  printf 'ERROR\n%s\n' "$message" >"$RESULT_FILE" 2>/dev/null || true
   exit 10
 }
 
@@ -49,4 +43,4 @@ if ! mv "$PAYLOAD" "$TARGET"; then
 fi
 
 rm -rf "$BACKUP" "$WORK_DIR" "$ARCHIVE" "$STATE_FILE"
-show_dialog "SceneKeeper ${VERSION} is installed. Close and reopen the SceneKeeper panel to use the update. After Effects does not need to restart." "SceneKeeper updated"
+printf 'INSTALLED\n%s\n' "$VERSION" >"$RESULT_FILE" || exit 11

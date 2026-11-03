@@ -9,7 +9,11 @@ $stateLines = Get-Content -LiteralPath $StateFile
 $archive = $stateLines[0]
 $target = $stateLines[1]
 $version = $stateLines[2]
-if (-not (Test-Path -LiteralPath $archive)) { exit 2 }
+$resultPath = "$StateFile.result"
+if (-not (Test-Path -LiteralPath $archive)) {
+  try { Set-Content -LiteralPath $resultPath -Value @("ERROR", "The update archive is missing.") -Encoding UTF8 } catch {}
+  exit 2
+}
 
 # Install the extension while After Effects remains open. The loaded panel keeps
 # running from memory; close and reopen the SceneKeeper panel after installation
@@ -38,10 +42,7 @@ try {
   } catch {
     $failureMessage = $_.Exception.Message
     Add-Content -LiteralPath $logPath -Value "SceneKeeper update failed: $failureMessage"
-    try {
-      Add-Type -AssemblyName PresentationFramework
-      [System.Windows.MessageBox]::Show("SceneKeeper $version could not be installed. Close and reopen the SceneKeeper panel, then retry. Also check that your Windows account can modify:`n$target`n`nDetails: $failureMessage`n`nLog: $logPath", "SceneKeeper update failed") | Out-Null
-    } catch {}
+    try { Set-Content -LiteralPath $resultPath -Value @("ERROR", $failureMessage) -Encoding UTF8 } catch {}
     throw
   } finally {
     if ($work -and (Test-Path -LiteralPath $work)) { Remove-Item -LiteralPath $work -Recurse -Force }
@@ -51,8 +52,4 @@ try {
   exit 10
 }
 try { Stop-Transcript | Out-Null } catch {}
-
-try {
-  Add-Type -AssemblyName PresentationFramework
-  [System.Windows.MessageBox]::Show("SceneKeeper $version is installed. Close and reopen the SceneKeeper panel to use the update. After Effects does not need to restart.", "SceneKeeper updated") | Out-Null
-} catch {}
+Set-Content -LiteralPath $resultPath -Value @("INSTALLED", $version) -Encoding UTF8
