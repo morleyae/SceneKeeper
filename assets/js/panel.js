@@ -11,6 +11,7 @@
     const libraryTabs = document.getElementById("library-tabs");
     const newLibraryTabButton = document.getElementById("new-library-tab");
     const favoriteList = document.getElementById("favorite-list");
+    const favoritesSection = document.querySelector(".favorites-section");
     function syncFullscreenPanelPage() {
       const activeFullscreenPage = document.querySelector(".panel-fullscreen-modal:not([hidden])");
       const isFullscreenPageOpen = Boolean(activeFullscreenPage);
@@ -60,6 +61,7 @@
     const newFolderName = document.getElementById("new-folder-name");
     const createFolderButton = document.getElementById("create-folder-button");
     const libraryContextMenu = document.getElementById("library-context-menu");
+    let libraryContextMenuAnchor = null;
     const folderCreateDialog = document.getElementById("folder-create-dialog");
     const folderCreateName = document.getElementById("folder-create-name");
     const confirmFolderCreateButton = document.getElementById("confirm-folder-create-button");
@@ -96,7 +98,6 @@
     const favoritePreviewCurrent = document.getElementById("favorite-preview-current");
     const favoritePreviewDuration = document.getElementById("favorite-preview-duration");
     const favoriteMuteButton = document.getElementById("favorite-mute-button");
-    const saveFavoriteButton = document.getElementById("save-favorite-button");
     const quickSaveSelectedClipsButton = document.getElementById("quick-save-selected-clips");
     const saveClipDialog = document.getElementById("save-clip-dialog");
     const saveClipNameInput = document.getElementById("save-clip-name");
@@ -115,11 +116,14 @@
     const longClipConfirmationText = document.getElementById("long-clip-confirmation-text");
     const saveLongClipButton = document.getElementById("save-long-clip-button");
     const shortenLongClipButton = document.getElementById("shorten-long-clip-button");
+    const saveFirst10SecondsButton = document.getElementById("save-first-10-seconds-button");
     const replaceClipConfirmation = document.getElementById("replace-clip-confirmation");
     const replaceClipConfirmationText = document.getElementById("replace-clip-confirmation-text");
     const confirmClipReplacementButton = document.getElementById("confirm-clip-replacement-button");
     const cancelClipReplacementButton = document.getElementById("cancel-clip-replacement-button");
     const insertFavoriteButton = document.getElementById("insert-favorite-button");
+    const extraClipActionsToggle = document.getElementById("extra-clip-actions-toggle");
+    const extraClipActions = document.getElementById("extra-clip-actions");
     const randomMarkerInsertOpenButton = document.getElementById("random-marker-insert-open");
     const replaceSelectedClipOpenButton = document.getElementById("replace-selected-clip-open");
     const quickReplaceSelectedClipButton = document.getElementById("quick-replace-selected-clip");
@@ -208,6 +212,9 @@
     const clipReorderLocation = document.getElementById("clip-reorder-location");
     const clipReorderCancelButton = document.getElementById("clip-reorder-cancel");
     const clipReorderDoneButton = document.getElementById("clip-reorder-done");
+    const manualReorderConfirmation = document.getElementById("manual-reorder-confirmation");
+    const cancelManualReorderButton = document.getElementById("cancel-manual-reorder");
+    const confirmManualReorderButton = document.getElementById("confirm-manual-reorder");
     const emptyClipTrashButton = document.getElementById("empty-clip-trash-button");
     const clipTrashConfirmation = document.getElementById("clip-trash-confirmation");
     const clipTrashConfirmationText = document.getElementById("clip-trash-confirmation-text");
@@ -247,8 +254,32 @@
     let footageStatusRequestActive = false;
     let pendingFootageStatusCallback = null;
     let draggedClipOrderId = "";
+    let activeClipDragGhost = null;
+    function moveActiveClipDragGhost(event) {
+      if (!activeClipDragGhost) return;
+      const x = Number(event.clientX);
+      const y = Number(event.clientY);
+      if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 ||
+          x > document.documentElement.clientWidth || y > document.documentElement.clientHeight) {
+        activeClipDragGhost.style.display = "none";
+        return;
+      }
+      activeClipDragGhost.style.display = "block";
+      activeClipDragGhost.style.left = `${x}px`;
+      activeClipDragGhost.style.top = `${y}px`;
+    }
+    document.addEventListener("dragover", moveActiveClipDragGhost, true);
+    document.addEventListener("dragleave", (event) => {
+      if (!activeClipDragGhost) return;
+      if (event.clientX <= 0 || event.clientY <= 0 ||
+          event.clientX >= document.documentElement.clientWidth ||
+          event.clientY >= document.documentElement.clientHeight) {
+        activeClipDragGhost.style.display = "none";
+      }
+    }, true);
     let clipReorderRequestActive = false;
     let pendingClipReorderIds = null;
+    let pendingManualReorderOpen = null;
     let originalClipReorderIds = null;
     let clipReorderFolderId = "";
     let pendingFolderReorderIds = null;
@@ -290,6 +321,7 @@
     const expandedSaveClipFolderIds = new Set();
     const collapsedSaveClipSearchFolderIds = new Set();
     let pendingClipReplacementIndex = null;
+    let pendingQuickSaveBatch = null;
     let exportSelectedFootagePaths = [];
     let exportSelectedFolderIds = [];
     let exportSelectionMode = "folders";
@@ -333,7 +365,6 @@
     let clipPreviewFormat = "square";
     let previewPanelFocused = true;
     let errorDialogReturnFocus = null;
-    let resultClearTimer = null;
     let favoriteLoadNoticeTimer = null;
     let suppressInitialFavoriteLoadStatus = true;
     let shiftDeleteMode = false;
@@ -509,26 +540,11 @@
         clearTimeout(favoriteLoadNoticeTimer);
         favoriteLoadNoticeTimer = null;
       }
-      if (resultClearTimer) {
-        clearTimeout(resultClearTimer);
-        resultClearTimer = null;
-      }
+      if (message === "BACKUP_RECENT") return;
       const displayMessage = message === "BACKUP_SAVED" ? "Backup saved." : (message || "");
-      if (tone === "error" || tone === "success" || tone === "warning") {
-        result.textContent = "";
-        result.className = "";
-        showActionNotification(displayMessage || (tone === "error" ? "An unexpected error occurred." : ""), tone);
-        return;
-      }
-      result.textContent = displayMessage;
+      result.textContent = "";
       result.className = "";
-      if (displayMessage) {
-        resultClearTimer = setTimeout(() => {
-          result.textContent = "";
-          result.className = "";
-          resultClearTimer = null;
-        }, 4000);
-      }
+      if (displayMessage) showActionNotification(displayMessage, tone || "info");
     }
 
     function getGuidedTourStep(stepId, errorMessage) {
@@ -560,17 +576,9 @@
         saveAction: {
           label: "GETTING STARTED · 1 OF 4",
           title: "Save your first clip",
-          copy: "The sample footage layer is selected in the tutorial composition. Open the save dialog to add it to your SceneKeeper library.",
-          next: "Open Save Clip",
-          target: "#save-favorite-button",
-          targetAction: true
-        },
-        saveExample: {
-          label: "GETTING STARTED · 2 OF 4",
-          title: "Save the example",
-          copy: "Save it in the Getting Started collection. SceneKeeper will select the new clip for you when the save completes.",
+          copy: "The sample footage layer is selected in the tutorial composition. Click Save a Selected Clip to add it to the Getting Started collection.",
           next: "Save example",
-          target: "#save-clip-scene-location-button",
+          target: "#quick-save-selected-clips",
           targetAction: true
         },
         saving: {
@@ -901,13 +909,7 @@
       if (guidedTourStep === "welcome" || guidedTourStep === "error") {
         prepareGuidedTutorialExample();
       } else if (guidedTourStep === "saveAction") {
-        saveFavoriteButton.click();
-      } else if (guidedTourStep === "saveExample") {
-        if (saveClipSceneLocationButton.hidden) {
-          showActionNotification("Choose the Getting Started collection to save the example.");
-          return;
-        }
-        saveClipSceneLocationButton.click();
+        quickSaveSelectedClipsButton.click();
       } else if (guidedTourStep === "insert") {
         if (insertFavoriteButton.disabled) {
           showActionNotification("Select the saved example clip first.");
@@ -982,7 +984,7 @@
       const isLibraryWhitespace = guidedTourStep === "organize" && event.target.closest(".favorites-section") &&
         !event.target.closest("button, input, select, textarea, a, .favorite-result-item, .library-tab-item, .library-context-menu");
       if (isLibraryWhitespace && ((event.type === "pointerdown" && event.button === 2) || event.type === "contextmenu")) return;
-      const targetActionStep = ["saveAction", "saveExample", "insert"].includes(guidedTourStep);
+      const targetActionStep = ["saveAction", "insert"].includes(guidedTourStep);
       if (targetActionStep && guidedTourTarget && guidedTourTarget.contains(event.target)) return;
       const isTutorialSample = guidedTourStep === "insert" &&
         event.target.closest(`.favorite-result[data-storage-index="${guidedTourSampleStorageIndex}"]`);
@@ -1016,11 +1018,11 @@
     const SAVE_CLIP_DEFAULTS_STORAGE_KEY = "sceneKeeperSaveClipDefaults";
     const WORKSPACES_STORAGE_KEY = "sceneKeeperWorkspaces";
     let clipTrackingData = {};
-    let clipSortMode = "manual";
+    let clipSortMode = "footage";
     try {
       clipTrackingData = JSON.parse(window.localStorage.getItem(CLIP_TRACKING_STORAGE_KEY) || "{}") || {};
       const storedSortMode = window.localStorage.getItem(CLIP_SORT_MODE_STORAGE_KEY);
-      if (["manual", "inserted", "leastInserted", "recent", "random"].includes(storedSortMode)) clipSortMode = storedSortMode;
+      if (["manual", "inserted", "leastInserted", "recent", "footage"].includes(storedSortMode)) clipSortMode = storedSortMode;
     } catch (error) {
       clipTrackingData = {};
     }
@@ -1082,15 +1084,6 @@
         incrementClipInsertCount(record);
         if (onSuccess) onSuccess(response);
       });
-    }
-
-    function sortRandomizedClips() {
-      favoriteRecords.forEach((record) => {
-        const key = getClipTrackingKey(record);
-        if (!clipTrackingData[key]) clipTrackingData[key] = { insertCount: 0, addedAt: Date.now(), randomRank: Math.random() };
-        else clipTrackingData[key].randomRank = Math.random();
-      });
-      saveClipTrackingData();
     }
 
     function applyClipPreviewFormat(format) {
@@ -1209,10 +1202,45 @@
       return getLibraryFavoriteKeys(entry).some((key) => libraryFavoriteKeys.has(key));
     }
 
+    function getClipFootageName(clip) {
+      const sourcePath = String(clip && clip.sourcePath || "")
+        .trim()
+        .replace(/\\/g, "/")
+        .replace(/\/+$/, "");
+      const fileName = sourcePath.split("/").pop();
+      if (fileName) return fileName;
+      return String(clip && clip.sourceName || "").trim() || "Unknown footage";
+    }
+
+    function getClipFootageGroupKey(clip) {
+      const sourcePath = String(clip && clip.sourcePath || "").trim().replace(/\\/g, "/");
+      return sourcePath ? `path:${sourcePath.toLocaleLowerCase()}` : `name:${getClipFootageName(clip).toLocaleLowerCase()}`;
+    }
+
     function sortClipRecords(clips, mode = clipSortMode) {
       return clips
         .map((clip, index) => ({ clip, index }))
         .sort((first, second) => {
+          if (mode === "footage") {
+            const firstName = getClipFootageName(first.clip);
+            const secondName = getClipFootageName(second.clip);
+            const nameDifference = firstName.localeCompare(secondName, undefined, { sensitivity: "base", numeric: true });
+            if (nameDifference) return nameDifference;
+            const firstPath = String(first.clip.sourcePath || "").toLocaleLowerCase();
+            const secondPath = String(second.clip.sourcePath || "").toLocaleLowerCase();
+            const pathDifference = firstPath.localeCompare(secondPath, undefined, { sensitivity: "base", numeric: true });
+            if (pathDifference) return pathDifference;
+            const firstFavorite = isLibraryFavorite({ type: "clip", clip: first.clip });
+            const secondFavorite = isLibraryFavorite({ type: "clip", clip: second.clip });
+            const favoriteDifference = Number(secondFavorite) - Number(firstFavorite);
+            if (favoriteDifference) return favoriteDifference;
+            const firstIn = Number(first.clip.sourceIn);
+            const secondIn = Number(second.clip.sourceIn);
+            const safeFirstIn = Number.isFinite(firstIn) ? firstIn : Number.POSITIVE_INFINITY;
+            const safeSecondIn = Number.isFinite(secondIn) ? secondIn : Number.POSITIVE_INFINITY;
+            if (safeFirstIn !== safeSecondIn) return safeFirstIn - safeSecondIn;
+            return first.index - second.index;
+          }
           const firstFavorite = isLibraryFavorite({ type: "clip", clip: first.clip });
           const secondFavorite = isLibraryFavorite({ type: "clip", clip: second.clip });
           const favoriteDifference = Number(secondFavorite) - Number(firstFavorite);
@@ -1227,9 +1255,6 @@
           }
           if (mode === "recent" && firstData.addedAt !== secondData.addedAt) {
             return secondData.addedAt - firstData.addedAt;
-          }
-          if (mode === "random" && firstData.randomRank !== secondData.randomRank) {
-            return firstData.randomRank - secondData.randomRank;
           }
           if (mode === "manual") {
             const firstOrder = Number.isInteger(first.clip.sortOrder) ? first.clip.sortOrder : null;
@@ -2318,7 +2343,7 @@
         return;
       }
 
-      const isBackgroundLoad = /^(listClipFavorites|listClipFavoriteFootageStatus|listClipFolders|getClipSettings|getSceneKeeperQuickSaveStatus|getRandomMarkerSkipSuggestions|getRandomMarkerNames|getSelectedRandomMarkerSlots)\(/.test(scriptCall);
+      const isBackgroundLoad = /^(listClipFavorites|listClipFavoriteFootageStatus|listClipFolders|getClipSettings|getSceneKeeperQuickSaveStatus|getRandomMarkerSkipSuggestions|getRandomMarkerNames|getSelectedRandomMarkerSlots|createSceneKeeperBackup)\(/.test(scriptCall);
       if (!isBackgroundLoad) setResult("Working...", "");
       const libraryAction = /^(createClipFolder|moveClipFolder|renameClipFolder|deleteClipFolder|assignClipFavoriteFolder|saveSelectedClipFavorite|quickSaveSelectedClipsToFolder|confirmClipFavoriteReplacement|renameClipFavorite|updateClipFavorite|reorderClipFavorites|reorderClipFolders|reorderClipLibraryItems|deleteClipFavorite|deleteClipFavoriteFootage|restoreClipTrashItem|relinkClipFavoriteFootage|importClipFavorites|resolveClipFavoriteImport)\(/.test(scriptCall);
       const timelineAction = /^(insertClipFavorite|insertClipFavoriteIntoSelectedPrecomp|insertRandomClipFavoriteForSelectedFootage|insertRandomClipsBetweenMarkers|replaceRandomMarkerClips|replaceSelectedClipFromFolders|quickReplaceSelectedClip|prepareSelectedClipReplaceSlots|deleteRandomMarkerPrecomps)\(/.test(scriptCall);
@@ -2340,6 +2365,8 @@
           else setResult(message, "error");
           return;
         }
+
+        if (response === "BACKUP_RECENT") return;
 
         if (onSuccess) {
           onSuccess(response);
@@ -2425,10 +2452,9 @@
       renderFavoriteClips();
     }
 
-    favoriteList.addEventListener("click", (event) => {
-      if (event.target === favoriteList || event.target.classList.contains("favorite-results-empty")) {
-        clearLibrarySelection();
-      }
+    favoritesSection.addEventListener("click", (event) => {
+      if (event.target.closest(".favorite-result-item, button, input, select, textarea, a, [role='dialog'], .library-context-menu, .favorite-preview")) return;
+      clearLibrarySelection();
     });
 
     copySelectionButton.addEventListener("click", () => {
@@ -2497,11 +2523,20 @@
     function closeLibraryContextMenu() {
       libraryContextMenu.hidden = true;
       libraryContextMenu.innerHTML = "";
+      libraryContextMenuAnchor = null;
     }
 
     function openLibraryContextMenu(event, actions) {
       event.preventDefault();
+      const anchor = event.currentTarget && event.currentTarget !== document
+        ? event.currentTarget
+        : event.target;
+      if (!libraryContextMenu.hidden && libraryContextMenuAnchor === anchor) {
+        closeLibraryContextMenu();
+        return;
+      }
       closeLibraryContextMenu();
+      libraryContextMenuAnchor = anchor;
       actions.forEach((action) => {
         const button = document.createElement("button");
         button.type = "button";
@@ -3556,6 +3591,8 @@
       syncSearchClearButtons();
       hideFavoritePreview();
       favoriteList.classList.add("favorite-clip-grid");
+      favoriteList.classList.toggle("footage-sorted", clipSortMode === "footage");
+      let resultItemContainer = favoriteList;
       renderExplorerTabs();
       renderLibraryBreadcrumb();
       favoriteList.innerHTML = "";
@@ -3569,6 +3606,39 @@
       function setSelectedResult(key) {
         selectedLibraryItemKey = key;
         syncSelectionVisualState();
+      }
+
+      function createClipDragImage(name) {
+        const label = String(name || "Clip").slice(0, 20)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="176" height="48" viewBox="0 0 176 48"><rect x="1" y="1" width="174" height="46" rx="6" fill="#262a2d" stroke="#62b6e9" stroke-width="2"/><rect x="8" y="8" width="32" height="32" rx="4" fill="#3c515d"/><path d="M18 15h12v18H18zM15 18h3m12 0h3M15 30h3m12 0h3" fill="none" stroke="#d5e6ee" stroke-width="2" stroke-linecap="round"/><text x="48" y="23" fill="#f3f4f5" font-family="Arial,sans-serif" font-size="12" font-weight="700">${label}</text><text x="48" y="38" fill="#aab7bf" font-family="Arial,sans-serif" font-size="10">Insert at playhead</text></svg>`;
+        const image = new Image();
+        image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        return image;
+      }
+
+      function startLibraryItemDragPreview(button, event) {
+        if (activeClipDragGhost && activeClipDragGhost.parentNode) {
+          activeClipDragGhost.parentNode.removeChild(activeClipDragGhost);
+        }
+        activeClipDragGhost = document.createElement("div");
+        activeClipDragGhost.className = "favorite-clip-grid scene-keeper-live-drag-ghost";
+        const ghostCard = button.cloneNode(true);
+        ghostCard.classList.remove("is-dragging");
+        ghostCard.removeAttribute("title");
+        ghostCard.draggable = false;
+        ghostCard.setAttribute("aria-hidden", "true");
+        activeClipDragGhost.appendChild(ghostCard);
+        document.body.appendChild(activeClipDragGhost);
+        moveActiveClipDragGhost(event);
+        return ghostCard;
+      }
+
+      function stopLibraryItemDragPreview() {
+        if (activeClipDragGhost && activeClipDragGhost.parentNode) {
+          activeClipDragGhost.parentNode.removeChild(activeClipDragGhost);
+        }
+        activeClipDragGhost = null;
       }
 
       function showResultContextMenu(event, entry) {
@@ -3650,8 +3720,11 @@
         if (entry.type === "clip") {
           button.draggable = true;
           button.dataset.storageIndex = entry.clip.storageIndex;
+          button.title = "Drag outside SceneKeeper to insert this saved clip at the After Effects playhead";
+          const clipDragImage = createClipDragImage(entry.name);
           button.addEventListener("dragstart", (event) => {
             draggedClipOrderId = "";
+            startLibraryItemDragPreview(button, event);
             const selectedClipIndices = getSelectedLibraryEntries()
               .filter((selectedEntry) => selectedEntry.type === "clip")
               .map((selectedEntry) => selectedEntry.clip.storageIndex);
@@ -3660,11 +3733,30 @@
               : [entry.clip.storageIndex];
             const dragData = dragIndices.length > 1 ? `clips:${JSON.stringify(dragIndices)}` : String(dragIndices[0]);
             event.dataTransfer.setData("text/plain", dragData);
-            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.effectAllowed = "copyMove";
+            if (typeof event.dataTransfer.setDragImage === "function") {
+              if (clipDragImage.complete && clipDragImage.naturalWidth > 0) {
+                event.dataTransfer.setDragImage(clipDragImage, 8, 12);
+              } else {
+                const bounds = button.getBoundingClientRect();
+                event.dataTransfer.setDragImage(button,
+                  Math.max(0, Math.min(bounds.width, event.clientX - bounds.left)),
+                  Math.max(0, Math.min(bounds.height, event.clientY - bounds.top)));
+              }
+            }
             button.classList.add("is-dragging");
           });
-          button.addEventListener("dragend", () => {
+          button.addEventListener("dragend", (event) => {
             button.classList.remove("is-dragging");
+            stopLibraryItemDragPreview();
+            const pointerOutsidePanel = event.clientX < 0 || event.clientY < 0 ||
+              event.clientX > document.documentElement.clientWidth ||
+              event.clientY > document.documentElement.clientHeight;
+            if (pointerOutsidePanel && event.dataTransfer && event.dataTransfer.dropEffect !== "move") {
+              insertFavoriteRecord(entry.clip, (response) => {
+                setResult(response || `Inserted “${entry.name}” at the playhead.`, "success");
+              });
+            }
             draggedClipOrderId = "";
           });
         } else if (entry.type === "folder") {
@@ -3672,9 +3764,19 @@
           button.addEventListener("dragstart", (event) => {
             event.dataTransfer.setData("text/plain", `folder:${entry.folder.id}`);
             event.dataTransfer.effectAllowed = "move";
+            const ghostCard = startLibraryItemDragPreview(button, event);
+            if (typeof event.dataTransfer.setDragImage === "function") {
+              const bounds = button.getBoundingClientRect();
+              event.dataTransfer.setDragImage(ghostCard,
+                Math.max(0, Math.min(92, (event.clientX - bounds.left) * 92 / Math.max(1, bounds.width))),
+                Math.max(0, Math.min(92, (event.clientY - bounds.top) * 92 / Math.max(1, bounds.height))));
+            }
             button.classList.add("is-dragging");
           });
-          button.addEventListener("dragend", () => button.classList.remove("is-dragging"));
+          button.addEventListener("dragend", () => {
+            button.classList.remove("is-dragging");
+            stopLibraryItemDragPreview();
+          });
         }
 
         if (entry.type === "clip") {
@@ -3872,7 +3974,7 @@
         });
         moreButton.addEventListener("contextmenu", (event) => showResultContextMenu(event, entry));
         item.appendChild(moreButton);
-        favoriteList.appendChild(item);
+        resultItemContainer.appendChild(item);
         if (shiftDeleteMode) {
           moreButton.classList.add("delete-mode");
           moreButton.setAttribute("aria-label", `Delete ${entry.type} "${entry.name}"`);
@@ -3918,10 +4020,61 @@
         });
       }
 
+      function addFootageGroupHeading(clip) {
+        const group = document.createElement("div");
+        group.className = "favorite-footage-group";
+        const heading = document.createElement("div");
+        heading.className = "favorite-footage-group-heading";
+        heading.setAttribute("role", "presentation");
+        heading.textContent = getClipFootageName(clip);
+        heading.title = String(clip.sourcePath || clip.sourceName || "");
+        const items = document.createElement("div");
+        items.className = "favorite-footage-group-items";
+        group.appendChild(heading);
+        group.appendChild(items);
+        favoriteList.appendChild(group);
+        resultItemContainer = items;
+      }
+
+      function addSortedClipEntries(clips) {
+        let previousGroupKey = null;
+        clips.forEach((clip) => {
+          if (clipSortMode === "footage") {
+            const groupKey = getClipFootageGroupKey(clip);
+            if (groupKey !== previousGroupKey) addFootageGroupHeading(clip);
+            previousGroupKey = groupKey;
+          }
+          addClipEntry(clip);
+        });
+      }
+
       function addCollectionEntries(folderId) {
-        getLibraryCollectionEntries(folderId).forEach((entry) => {
+        const entries = getLibraryCollectionEntries(folderId);
+        if (clipSortMode === "footage") {
+          const folders = entries.filter((entry) => entry.type === "folder");
+          if (folders.length) {
+            const folderGrid = document.createElement("div");
+            folderGrid.className = "favorite-footage-folder-grid";
+            favoriteList.appendChild(folderGrid);
+            resultItemContainer = folderGrid;
+            folders.forEach((entry) => addFolderEntry(entry.folder));
+          }
+          const clips = entries.filter((entry) => entry.type === "clip").map((entry) => entry.clip);
+          addSortedClipEntries(clips);
+          resultItemContainer = favoriteList;
+          return;
+        }
+        let previousGroupKey = null;
+        entries.forEach((entry) => {
           if (entry.type === "folder") addFolderEntry(entry.folder);
-          else addClipEntry(entry.clip);
+          else {
+            if (clipSortMode === "footage") {
+              const groupKey = getClipFootageGroupKey(entry.clip);
+              if (groupKey !== previousGroupKey) addFootageGroupHeading(entry.clip);
+              previousGroupKey = groupKey;
+            }
+            addClipEntry(entry.clip);
+          }
         });
       }
 
@@ -3930,16 +4083,25 @@
       }
 
       if (query) {
-        sortFolderRecords(favoriteFolders.filter((folder) => folder.name.toLocaleLowerCase().includes(query))).forEach(addFolderEntry);
-        sortClips(favoriteRecords.filter((record) => {
+        const matchingFolders = sortFolderRecords(favoriteFolders.filter((folder) => folder.name.toLocaleLowerCase().includes(query)));
+        if (clipSortMode === "footage" && matchingFolders.length) {
+          const folderGrid = document.createElement("div");
+          folderGrid.className = "favorite-footage-folder-grid";
+          favoriteList.appendChild(folderGrid);
+          resultItemContainer = folderGrid;
+          matchingFolders.forEach(addFolderEntry);
+          resultItemContainer = favoriteList;
+        } else {
+          matchingFolders.forEach(addFolderEntry);
+        }
+        addSortedClipEntries(sortClips(favoriteRecords.filter((record) => {
           const searchableText = [
             record.displayName,
             record.sourceName,
             ...getFolderTrail(record.folderId).map((folder) => folder.name)
           ];
           return searchableText.some((value) => String(value || "").toLocaleLowerCase().includes(query));
-        }))
-          .forEach(addClipEntry);
+        })));
         if (!favoriteList.childElementCount) showEmptyResults(`No results for "${librarySearch.value.trim()}".`);
         updateFavoriteSelection();
         return;
@@ -4151,7 +4313,7 @@
       });
     }
 
-    function openClipReorderDialog() {
+    function showClipReorderDialog() {
       pendingFolderReorderIds = null;
       originalFolderReorderIds = null;
       folderReorderParentId = "";
@@ -4163,6 +4325,10 @@
       renderClipReorderList();
       clipReorderModal.hidden = false;
       focusFullscreenCloseButton();
+    }
+
+    function openClipReorderDialog() {
+      requestManualSortForReordering(showClipReorderDialog);
     }
 
     function reorderLibraryFolders(sourceFolderId, targetFolder, insertAfter) {
@@ -4462,13 +4628,17 @@
       });
     }
 
-    function openCollectionReorderDialog() {
+    function showCollectionReorderDialog() {
       collectionReorderParentId = selectedFolderId || "";
       originalCollectionOrderIds = getLibraryCollectionEntries(collectionReorderParentId).map(getCollectionOrderId);
       pendingCollectionOrderIds = originalCollectionOrderIds.slice();
       renderCollectionReorderList();
       clipReorderModal.hidden = false;
       focusFullscreenCloseButton();
+    }
+
+    function openCollectionReorderDialog() {
+      requestManualSortForReordering(showCollectionReorderDialog);
     }
 
     function commitCollectionReorderDialog() {
@@ -4670,7 +4840,7 @@
       document.getElementById("cancel-clip-trash-action").focus();
     }
 
-    function refreshFavorites(selectNewest, statusMessage, selectStorageIndex, onComplete, silent, selectClipId) {
+    function refreshFavorites(selectNewest, statusMessage, selectStorageIndex, onComplete, silent, selectClipId, selectOnly = false) {
       callAE("listClipFavorites()", "", (response) => {
         favoriteRecords = [];
         favoriteList.innerHTML = "";
@@ -4744,6 +4914,7 @@
           : (selectStorageIndex === undefined
             ? newestRecord
             : favoriteRecords.find((record) => record.storageIndex === selectStorageIndex));
+        if (selectOnly && selectedRecord) selectedLibraryKeys.clear();
         if (selectedRecord) {
           selectedFolderId = selectedRecord.folderId || "";
           selectedFootagePath = selectedRecord.sourcePath;
@@ -4942,7 +5113,7 @@
       });
     }
 
-    function saveClipToFolder(folderId, confirmLongClip = false) {
+    function saveClipToFolder(folderId, confirmLongClip = false, saveFirstTenSeconds = false) {
       const destinationFolderId = folderId || "";
       if (!destinationFolderId) {
         setResult("Please select or create a folder before saving a clip.", "error");
@@ -4960,7 +5131,7 @@
         setGuidedTourStep("saving");
       }
       saveClipDialog.hidden = true;
-      callAE(`saveSelectedClipFavorite(${encodedFolderId}, ${saveClipPosition.checked}, ${saveClipScale.checked}, ${saveClipAudio.checked}, ${encodedCustomName}, ${confirmLongClip})`, "Clip saved.", (response) => {
+      callAE(`saveSelectedClipFavorite(${encodedFolderId}, ${saveClipPosition.checked}, ${saveClipScale.checked}, ${saveClipAudio.checked}, ${encodedCustomName}, ${confirmLongClip}, ${saveFirstTenSeconds})`, "Clip saved.", (response) => {
         if (response.indexOf("LONG_CLIP_CONFIRM|") === 0) {
           if (isGuidedTutorialSave) {
             guidedTourBusy = false;
@@ -4997,7 +5168,7 @@
             guidedTourSampleStorageIndex = selectedFavoriteStorageIndex;
             setGuidedTourStep("preview");
           }
-        });
+        }, false, undefined, true);
       }, (message) => {
         if (isGuidedTutorialSave) {
           guidedTourBusy = false;
@@ -5044,53 +5215,109 @@
       }
     }
 
-    saveFavoriteButton.addEventListener("click", () => {
-      callAE("captureSelectedClipFavorite()", "", () => {
-        if (favoriteFoldersLoaded) {
-          showSaveClipDialog();
-        } else {
-          refreshFavoriteFolders(showSaveClipDialog);
-        }
-      });
-    });
+    function decodeQuickSaveField(value) {
+      try { return decodeURIComponent(value || ""); }
+      catch (error) { return value || ""; }
+    }
 
-    quickSaveSelectedClipsButton.addEventListener("click", () => {
-      if (!favoriteFolders.some((folder) => folder.id === selectedFolderId)) {
-        setResult("Open a collection folder before using Quick Save.", "error");
-        return;
-      }
+    function runQuickSaveBatch(startAtIndex = 0, confirmLongClip = false, saveFirstTenSeconds = false) {
+      if (!pendingQuickSaveBatch) return;
       quickSaveSelectedClipsButton.disabled = true;
-      const encodedFolderId = JSON.stringify(encodeURIComponent(selectedFolderId));
+      const batch = pendingQuickSaveBatch;
+      const encodedFolderId = JSON.stringify(encodeURIComponent(batch.folderId));
       callAE(
-        `quickSaveSelectedClipsToFolder(${encodedFolderId}, ${saveDefaultPosition.checked}, ${saveDefaultScale.checked}, ${saveDefaultAudio.checked})`,
+        `quickSaveSelectedClipsToFolder(${encodedFolderId}, ${batch.savePosition}, ${batch.saveScale}, ${batch.saveAudio}, ${startAtIndex}, ${confirmLongClip}, ${saveFirstTenSeconds})`,
         "",
         (response) => {
           quickSaveSelectedClipsButton.disabled = false;
           const fields = String(response || "").split("|");
-          if (fields[0] !== "QUICKSAVE_DONE") {
-            setResult(response || "Quick Save could not save the selected clips.", "error");
+          if (fields[0] === "LONG_CLIP_CONFIRM") {
+            batch.savedCount += Number(fields[3]) || 0;
+            const failures = decodeQuickSaveField(fields[5]);
+            const lastClipId = decodeQuickSaveField(fields[6]);
+            const warnings = decodeQuickSaveField(fields[7]);
+            if (failures) batch.failures.push(failures);
+            if (warnings) batch.longClipWarnings.push(warnings);
+            if (lastClipId) batch.lastClipId = lastClipId;
+            batch.nextLayerIndex = Number(fields[2]) || 0;
+            longClipConfirmationText.textContent = `This clip is ${formatTimestamp(Number(fields[1]))} long. Save its full length, or shorten it in After Effects first?`;
+            longClipConfirmation.hidden = false;
+            shortenLongClipButton.focus();
             return;
           }
-          let failures = "";
-          let clipId = "";
-          try {
-            failures = decodeURIComponent(fields[3] || "");
-            clipId = decodeURIComponent(fields[4] || "");
-          } catch (error) {
-            failures = fields[3] || "";
-            clipId = fields[4] || "";
+          if (fields[0] !== "QUICKSAVE_DONE") {
+            pendingQuickSaveBatch = null;
+            setResult(response || "Could not save the selected clips.", "error");
+            if (guidedTourActive && guidedTourStep === "saving") {
+              guidedTourBusy = false;
+              setGuidedTourStep("saveAction");
+            }
+            return;
           }
-          const savedCount = Number(fields[1]) || 0;
+          batch.savedCount += Number(fields[1]) || 0;
+          const folderName = decodeQuickSaveField(fields[2]);
+          const failures = decodeQuickSaveField(fields[3]);
+          const clipId = decodeQuickSaveField(fields[4]) || batch.lastClipId || "";
+          const warnings = decodeQuickSaveField(fields[5]);
+          if (failures) batch.failures.push(failures);
+          if (warnings) batch.longClipWarnings.push(warnings);
+          pendingQuickSaveBatch = null;
           refreshFavorites(!clipId, "", undefined, () => {
-            const success = `Quick-saved ${savedCount} clip${savedCount === 1 ? "" : "s"}.`;
-            setResult(failures ? `${success} ${failures}` : success, failures ? "warning" : "success");
-          }, true, clipId);
+            const success = `Saved ${batch.savedCount} clip${batch.savedCount === 1 ? "" : "s"}${folderName ? ` to ${folderName}` : ""}.`;
+            const notices = batch.failures.slice();
+            if (batch.skippedLongClipCount) notices.push(`${batch.skippedLongClipCount} long clip${batch.skippedLongClipCount === 1 ? " was" : "s were"} not saved. Shorten ${batch.skippedLongClipCount === 1 ? "it" : "them"} in After Effects and save again.`);
+            if (batch.longClipWarnings.length) notices.push(`Saved at full length: ${batch.longClipWarnings.join("; ")}.`);
+            setResult(notices.length ? `${success} ${notices.join(" ")}` : success, notices.length ? "warning" : "success");
+            if (guidedTourActive && guidedTourStep === "saving") {
+              guidedTourBusy = false;
+              if (batch.savedCount > 0) {
+                guidedTourSampleStorageIndex = selectedFavoriteStorageIndex;
+                setGuidedTourStep("preview");
+              } else {
+                setGuidedTourStep("saveAction");
+              }
+            }
+          }, true, clipId, true);
         },
         (message) => {
           quickSaveSelectedClipsButton.disabled = false;
+          pendingQuickSaveBatch = null;
           setResult(message, "error");
+          if (guidedTourActive && guidedTourStep === "saving") {
+            guidedTourBusy = false;
+            setGuidedTourStep("saveAction");
+          }
         }
       );
+    }
+
+    extraClipActionsToggle.addEventListener("click", () => {
+      const expanded = extraClipActionsToggle.getAttribute("aria-expanded") !== "true";
+      extraClipActionsToggle.setAttribute("aria-expanded", String(expanded));
+      extraClipActions.hidden = !expanded;
+    });
+
+    quickSaveSelectedClipsButton.addEventListener("click", () => {
+      if (!favoriteFolders.some((folder) => folder.id === selectedFolderId)) {
+        setResult("Open a collection folder before saving.", "error");
+        return;
+      }
+      pendingQuickSaveBatch = {
+        folderId: selectedFolderId,
+        savePosition: saveDefaultPosition.checked,
+        saveScale: saveDefaultScale.checked,
+        saveAudio: saveDefaultAudio.checked,
+        savedCount: 0,
+        skippedLongClipCount: 0,
+        failures: [],
+        longClipWarnings: [],
+        lastClipId: ""
+      };
+      if (guidedTourActive && guidedTourStep === "saveAction") {
+        guidedTourBusy = true;
+        setGuidedTourStep("saving");
+      }
+      runQuickSaveBatch();
     });
 
     saveClipCurrentLocationButton.addEventListener("click", () => {
@@ -5118,17 +5345,42 @@
       clearSelectedClipCapture();
     });
     saveLongClipButton.addEventListener("click", () => {
+      if (pendingQuickSaveBatch) {
+        const nextIndex = pendingQuickSaveBatch.nextLayerIndex;
+        longClipConfirmation.hidden = true;
+        runQuickSaveBatch(nextIndex, true);
+        return;
+      }
       longClipConfirmation.hidden = true;
       saveClipToFolder(saveClipSelectedFolderId || saveClipPickerFolderId, true);
     });
     shortenLongClipButton.addEventListener("click", () => {
+      if (pendingQuickSaveBatch) {
+        pendingQuickSaveBatch.skippedLongClipCount++;
+        const nextIndex = pendingQuickSaveBatch.nextLayerIndex + 1;
+        longClipConfirmation.hidden = true;
+        runQuickSaveBatch(nextIndex, false);
+        return;
+      }
       longClipConfirmation.hidden = true;
       clearSelectedClipCapture();
       setResult("Clip was not saved. Shorten it in After Effects, then save it again.", "");
     });
+    saveFirst10SecondsButton.addEventListener("click", () => {
+      if (pendingQuickSaveBatch) {
+        const nextIndex = pendingQuickSaveBatch.nextLayerIndex;
+        longClipConfirmation.hidden = true;
+        runQuickSaveBatch(nextIndex, false, true);
+        return;
+      }
+      longClipConfirmation.hidden = true;
+      saveClipToFolder(saveClipSelectedFolderId || saveClipPickerFolderId, false, true);
+    });
     longClipConfirmation.addEventListener("click", (event) => {
       if (event.target === longClipConfirmation) {
         longClipConfirmation.hidden = true;
+        pendingQuickSaveBatch = null;
+        quickSaveSelectedClipsButton.disabled = false;
         clearSelectedClipCapture();
         setResult("Clip was not saved. Shorten it in After Effects, then save it again.", "");
       }
@@ -5141,7 +5393,7 @@
       replaceClipConfirmation.hidden = true;
       callAE("confirmClipFavoriteReplacement()", "Clip replaced.", (response) => {
         expandedSaveClipFolderIds.clear();
-        refreshFavorites(false, response, replacementIndex);
+        refreshFavorites(false, response, replacementIndex, undefined, false, undefined, true);
       });
     });
 
@@ -5169,11 +5421,11 @@
 
     function syncClipSortMenu() {
       const modeLabels = {
+        footage: "Footage and In point",
         manual: "Manual order",
         inserted: "Most inserted",
         leastInserted: "Least inserted",
-        recent: "Recently added",
-        random: "Random order"
+        recent: "Recently added"
       };
       clipSortMenu.querySelectorAll("[data-sort-mode]").forEach((button) => {
         button.setAttribute("aria-checked", String(button.dataset.sortMode === clipSortMode));
@@ -5181,6 +5433,29 @@
       clipSortMenuToggle.title = `Sort clips: ${modeLabels[clipSortMode] || modeLabels.manual}`;
       clipSortMenuToggle.setAttribute("aria-label", clipSortMenuToggle.title);
       clipSortMenuToggle.setAttribute("aria-pressed", String(!clipSortMenu.hidden));
+    }
+
+    function selectManualSortForReordering() {
+      if (clipSortMode !== "manual") {
+        clipSortMode = "manual";
+        try {
+          window.localStorage.setItem(CLIP_SORT_MODE_STORAGE_KEY, clipSortMode);
+        } catch (error) {
+          // Manual order still applies for this session when storage is unavailable.
+        }
+        syncClipSortMenu();
+        renderFavoriteClips();
+      }
+    }
+
+    function requestManualSortForReordering(openDialog) {
+      if (clipSortMode === "manual") {
+        openDialog();
+        return;
+      }
+      pendingManualReorderOpen = openDialog;
+      manualReorderConfirmation.hidden = false;
+      cancelManualReorderButton.focus();
     }
 
     function closeClipSortMenu(returnFocus) {
@@ -5199,10 +5474,9 @@
     });
     clipSortMenu.querySelectorAll("[data-sort-mode]").forEach((button) => {
       button.addEventListener("click", () => {
-        clipSortMode = ["manual", "inserted", "leastInserted", "recent", "random"].includes(button.dataset.sortMode)
+        clipSortMode = ["manual", "inserted", "leastInserted", "recent", "footage"].includes(button.dataset.sortMode)
           ? button.dataset.sortMode
-        : "manual";
-        if (clipSortMode === "random") sortRandomizedClips();
+        : "footage";
         try {
           window.localStorage.setItem(CLIP_SORT_MODE_STORAGE_KEY, clipSortMode);
         } catch (error) {
@@ -6819,6 +7093,21 @@
     document.getElementById("clip-reorder-close").addEventListener("click", closeClipReorderDialog);
     clipReorderCancelButton.addEventListener("click", closeClipReorderDialog);
     clipReorderDoneButton.addEventListener("click", commitCollectionReorderDialog);
+    cancelManualReorderButton.addEventListener("click", () => {
+      pendingManualReorderOpen = null;
+      manualReorderConfirmation.hidden = true;
+      librarySearch.focus();
+    });
+    confirmManualReorderButton.addEventListener("click", () => {
+      const openDialog = pendingManualReorderOpen;
+      pendingManualReorderOpen = null;
+      manualReorderConfirmation.hidden = true;
+      selectManualSortForReordering();
+      if (openDialog) openDialog();
+    });
+    manualReorderConfirmation.addEventListener("click", (event) => {
+      if (event.target === manualReorderConfirmation) cancelManualReorderButton.click();
+    });
     emptyClipTrashButton.addEventListener("click", () => confirmClipTrashDeletion("empty"));
 
     document.getElementById("cancel-clip-trash-action").addEventListener("click", () => {
@@ -6891,6 +7180,8 @@
       if (e.key !== "Escape") return;
       if (!clipSortMenu.hidden) {
         closeClipSortMenu(true);
+      } else if (!manualReorderConfirmation.hidden) {
+        cancelManualReorderButton.click();
       } else if (!workspaceDeleteConfirmation.hidden) {
         cancelDeleteSelectedWorkspace();
       } else if (!clipTrashConfirmation.hidden) {
@@ -7042,7 +7333,14 @@
           let clipId = "";
           try { clipId = decodeURIComponent(responseParts[1] || ""); }
           catch (decodeError) { clipId = responseParts[1] || ""; }
-          refreshFavorites(false, "", undefined, null, true, clipId);
+          let longClipWarnings = "";
+          try { longClipWarnings = decodeURIComponent(responseParts[2] || ""); }
+          catch (decodeError) { longClipWarnings = responseParts[2] || ""; }
+          refreshFavorites(false, "", undefined, () => {
+            if (longClipWarnings) {
+              setResult(`Quick Save: long clips were saved at full length: ${longClipWarnings}.`, "warning");
+            }
+          }, true, clipId, true);
         }
       });
     }

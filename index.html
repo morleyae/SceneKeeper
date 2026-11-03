@@ -46,6 +46,15 @@
       </div>
     </div>
   </div>
+  <div id="manual-reorder-confirmation" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="manual-reorder-confirmation-text" hidden>
+    <div class="confirm-box-content">
+      <p id="manual-reorder-confirmation-text" class="confirm-copy">Reordering clips requires Manual order. Switch to Manual order and continue?</p>
+      <div class="confirm-actions">
+        <button id="cancel-manual-reorder" class="secondary" type="button">Cancel</button>
+        <button id="confirm-manual-reorder" type="button">Switch and continue</button>
+      </div>
+    </div>
+  </div>
   <div id="missing-footage-modal" class="settings-modal panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="missing-footage-title" hidden>
     <div class="help-modal-content missing-footage-content panel-fullscreen-content">
       <button id="missing-footage-close" class="settings-close" type="button" aria-label="Close missing footage">×</button>
@@ -314,11 +323,11 @@
           Sort by <span aria-hidden="true">▾</span>
         </button>
         <div id="clip-sort-menu" class="clip-sort-menu" role="menu" aria-label="Sort clips" hidden>
-          <button type="button" role="menuitemradio" data-sort-mode="manual" aria-checked="true"><span>Manual order</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
+          <button type="button" role="menuitemradio" data-sort-mode="footage" aria-checked="true"><span>Footage and In point</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
+          <button type="button" role="menuitemradio" data-sort-mode="manual" aria-checked="false"><span>Manual order</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
           <button type="button" role="menuitemradio" data-sort-mode="inserted" aria-checked="false"><span>Most inserted</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
           <button type="button" role="menuitemradio" data-sort-mode="leastInserted" aria-checked="false"><span>Least inserted</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
           <button type="button" role="menuitemradio" data-sort-mode="recent" aria-checked="false"><span>Recently added</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
-          <button type="button" role="menuitemradio" data-sort-mode="random" aria-checked="false"><span>Random order</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
         </div>
       </div>
     </div>
@@ -359,30 +368,34 @@
       </div>
       <p class="favorite-preview-message" id="favorite-preview-message"></p>
     </div>
-    <div class="library-actions" aria-label="Clip library actions">
-      <button id="undo-action-button" class="secondary compact" type="button" aria-label="Undo" title="Undo" data-tooltip="Undo">
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.5 4.5 3.5 7.5l3 3M4 7.5h5.5a3.5 3.5 0 1 1 0 7H7.5"/></svg>
-      </button>
-      <button id="copy-selection-button" class="secondary compact" type="button" aria-label="Copy" title="Copy" data-tooltip="Copy" disabled>
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M5 5V2.5h8.5V11H11M2.5 5H11v8.5H2.5z"/></svg>
-      </button>
-      <button id="paste-selection-button" class="secondary compact" type="button" aria-label="Paste" title="Paste" data-tooltip="Paste" disabled>
-        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3.5h4m-3-1h2a1 1 0 0 1 1 1v1H6v-1a1 1 0 0 1 1-1ZM4 4.5h-1v10h10v-10h-1M5.5 8h5M5.5 10.5h5M5.5 13h3"/></svg>
-      </button>
-      <button id="create-folder-toggle" class="secondary compact" type="button" aria-label="New Folder" title="New Folder" data-tooltip="New Folder">
-        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.5 5.5h5l1.7 2H17v8a1 1 0 0 1-1 1H4a1.5 1.5 0 0 1-1.5-1.5zM10 10v4m-2-2h4"/></svg>
-      </button>
+    <div class="clip-action-dock">
+      <div class="clip-action-row primary-clip-actions">
+        <button id="insert-favorite-button" type="button" disabled>Insert Selected Clip</button>
+        <button id="quick-save-selected-clips" class="secondary" type="button" title="Save selected footage layers to the open folder">Save a Selected Clip</button>
+      </div>
+      <div class="library-actions" aria-label="Clip library actions">
+        <button id="undo-action-button" class="secondary compact" type="button" aria-label="Undo" title="Undo" data-tooltip="Undo">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.5 4.5 3.5 7.5l3 3M4 7.5h5.5a3.5 3.5 0 1 1 0 7H7.5"/></svg>
+        </button>
+        <button id="copy-selection-button" class="secondary compact" type="button" aria-label="Copy" title="Copy" data-tooltip="Copy" disabled>
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M5 5V2.5h8.5V11H11M2.5 5H11v8.5H2.5z"/></svg>
+        </button>
+        <button id="paste-selection-button" class="secondary compact" type="button" aria-label="Paste" title="Paste" data-tooltip="Paste" disabled>
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3.5h4m-3-1h2a1 1 0 0 1 1 1v1H6v-1a1 1 0 0 1 1-1ZM4 4.5h-1v10h10v-10h-1M5.5 8h5M5.5 10.5h5M5.5 13h3"/></svg>
+        </button>
+        <button id="create-folder-toggle" class="secondary compact" type="button" aria-label="New Folder" title="New Folder" data-tooltip="New Folder">
+          <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M2.5 5.5h5l1.7 2H17v8a1 1 0 0 1-1 1H4a1.5 1.5 0 0 1-1.5-1.5zM10 10v4m-2-2h4"/></svg>
+        </button>
+      </div>
+      <button id="extra-clip-actions-toggle" class="secondary" type="button" aria-expanded="false" aria-controls="extra-clip-actions">More actions <span aria-hidden="true">▾</span></button>
+      <div id="extra-clip-actions" class="extra-clip-actions" hidden>
+        <div class="clip-action-row">
+          <button id="replace-selected-clip-open" class="secondary" type="button">Replace Selected Clips</button>
+          <button id="quick-replace-selected-clip" class="secondary" type="button" title="Replace selected clip layers using clips from the same saved folder">Quick Replace</button>
+        </div>
+        <button id="random-marker-insert-open" class="secondary" type="button">Random Clips Between Markers</button>
+      </div>
     </div>
-    <button id="insert-favorite-button" type="button" disabled>Insert Selected Clip</button>
-    <div class="clip-action-row">
-      <button id="save-favorite-button" class="secondary" type="button">Save a Selected Clip</button>
-      <button id="quick-save-selected-clips" class="secondary" type="button" title="Save selected footage layers to the open folder">Quick Save</button>
-    </div>
-    <div class="clip-action-row">
-      <button id="replace-selected-clip-open" class="secondary" type="button">Replace Selected Clips</button>
-      <button id="quick-replace-selected-clip" class="secondary" type="button" title="Replace selected clip layers using clips from the same saved folder">Quick Replace</button>
-    </div>
-    <button id="random-marker-insert-open" class="secondary" type="button">Random Clips Between Markers</button>
     <div id="random-marker-insert-dialog" class="confirm-box panel-fullscreen-modal" role="dialog" aria-modal="true" aria-labelledby="random-marker-insert-title" hidden>
       <div class="confirm-box-content random-marker-dialog-content panel-fullscreen-content">
         <div class="random-marker-title-row">
@@ -520,6 +533,7 @@
         <div class="confirm-actions">
           <button id="shorten-long-clip-button" class="secondary" type="button">I'll shorten it in After Effects</button>
           <button id="save-long-clip-button" type="button">Save full clip</button>
+          <button id="save-first-10-seconds-button" class="secondary" type="button">Save first 10 seconds</button>
         </div>
       </div>
     </div>

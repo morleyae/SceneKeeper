@@ -2343,7 +2343,7 @@ function cancelClipFavoriteCapture() {
     return "Clip selection cleared.";
 }
 
-function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, saveAudioState, encodedCustomName, confirmLongClip) {
+function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, saveAudioState, encodedCustomName, confirmLongClip, saveFirstTenSeconds) {
     if (savePosition === undefined) {
         savePosition = true;
     }
@@ -2423,7 +2423,10 @@ function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, save
     if (sourceIn < 0 || sourceOut <= sourceIn || sourceOut > layer.source.duration) {
         return "ERROR: The visible clip range is outside the footage duration.";
     }
-    if (sourceOut - sourceIn >= 180 && confirmLongClip !== true) {
+    if (saveFirstTenSeconds === true) {
+        sourceOut = Math.min(sourceOut, sourceIn + 10);
+    }
+    if (sourceOut - sourceIn >= 180 && confirmLongClip !== true && saveFirstTenSeconds !== true) {
         return "LONG_CLIP_CONFIRM|" + (sourceOut - sourceIn);
     }
 
@@ -2514,10 +2517,13 @@ function getSceneKeeperQuickSaveStatus() {
     return getSceneKeeperQuickSaveRevision() + "|" + encodeURIComponent(
         app.settings.haveSetting("SceneKeeper Quick Save", "RefreshClipId")
             ? app.settings.getSetting("SceneKeeper Quick Save", "RefreshClipId")
+            : "") + "|" + encodeURIComponent(
+        app.settings.haveSetting("SceneKeeper Quick Save", "RefreshWarning")
+            ? app.settings.getSetting("SceneKeeper Quick Save", "RefreshWarning")
             : "");
 }
 
-function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate) {
+function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, confirmLongClip, saveFirstTenSeconds) {
     var comp = getActiveComp();
     if (!comp) return "ERROR: Select footage clips in an active composition first.";
     if (!app.settings.haveSetting("SceneKeeper Quick Save", "FolderId")) {
@@ -2547,18 +2553,34 @@ function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate) {
         app.settings.getSetting("SceneKeeper Quick Save", "SaveAudio") === "1";
     var savedCount = 0;
     var failures = [];
+    var longClipWarnings = [];
     var lastSavedClipId = "";
-    for (var layerIndex = 0; layerIndex < selectedLayers.length; layerIndex++) {
+    var firstLayerIndex = Math.max(0, parseInt(startAtIndex, 10) || 0);
+    for (var layerIndex = firstLayerIndex; layerIndex < selectedLayers.length; layerIndex++) {
         var layer = selectedLayers[layerIndex];
         pendingClipFavoriteCapture = { comp: comp, layer: layer, time: comp.time };
         var result;
         try {
             result = saveSelectedClipFavorite(
-                encodeURIComponent(folderId), savePosition, saveScale, saveAudio, "", true);
+                encodeURIComponent(folderId), savePosition, saveScale, saveAudio, "",
+                confirmLongClip === true || skipRevisionUpdate !== true, saveFirstTenSeconds === true);
+            if (result.indexOf("LONG_CLIP_CONFIRM|") === 0) {
+                pendingClipFavoriteCapture = null;
+                pendingClipFavoriteReplacement = null;
+                return "LONG_CLIP_CONFIRM|" + result.split("|")[1] + "|" + layerIndex + "|" + savedCount + "|" +
+                    encodeURIComponent(folderName) + "|" + encodeURIComponent(failures.join(" | ")) + "|" +
+                    encodeURIComponent(lastSavedClipId) + "|" + encodeURIComponent(longClipWarnings.join("; "));
+            }
             if (result.indexOf("DUPLICATE_CLIP|") === 0) result = confirmClipFavoriteReplacement();
             if (result.indexOf("Saved clip:") === 0 || result.indexOf("Replaced clip:") === 0) {
                 savedCount++;
                 lastSavedClipId = lastClipFavoriteSavedId;
+                var savedSourceDuration = layer.outPoint - layer.inPoint;
+                if (!saveFirstTenSeconds && savedSourceDuration >= 180) {
+                    var wholeSeconds = Math.round(savedSourceDuration);
+                    var durationLabel = Math.floor(wholeSeconds / 60) + ":" + ("0" + (wholeSeconds % 60)).slice(-2);
+                    longClipWarnings.push(layer.name + " (" + durationLabel + ")");
+                }
             } else {
                 failures.push(layer.name + ": " + String(result).replace(/^ERROR:\s*/, ""));
             }
@@ -2568,22 +2590,23 @@ function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate) {
         pendingClipFavoriteCapture = null;
         pendingClipFavoriteReplacement = null;
     }
-    if (savedCount === 0) {
+    if (savedCount === 0 && firstLayerIndex === 0) {
         return "ERROR: No selected clips were saved. " + failures.join(" | ");
     }
     if (skipRevisionUpdate !== true) {
         var revision = parseInt(getSceneKeeperQuickSaveRevision(), 10);
         if (isNaN(revision)) revision = 0;
         app.settings.saveSetting("SceneKeeper Quick Save", "RefreshClipId", lastSavedClipId);
+        app.settings.saveSetting("SceneKeeper Quick Save", "RefreshWarning", longClipWarnings.join("; "));
         app.settings.saveSetting("SceneKeeper Quick Save", "RefreshRevision", String(revision + 1));
     }
-    return "QUICKSAVE_DONE|" + savedCount + "|" + encodeURIComponent(folderName) + "|" + encodeURIComponent(failures.join(" | ")) + "|" + encodeURIComponent(lastSavedClipId);
+    return "QUICKSAVE_DONE|" + savedCount + "|" + encodeURIComponent(folderName) + "|" + encodeURIComponent(failures.join(" | ")) + "|" + encodeURIComponent(lastSavedClipId) + "|" + encodeURIComponent(longClipWarnings.join("; "));
 }
 
-function quickSaveSelectedClipsToFolder(encodedFolderId, savePosition, saveScale, saveAudioState) {
+function quickSaveSelectedClipsToFolder(encodedFolderId, savePosition, saveScale, saveAudioState, startAtIndex, confirmLongClip, saveFirstTenSeconds) {
     var settingsResult = storeClipQuickSaveShortcutSettings(encodedFolderId, savePosition, saveScale, saveAudioState);
     if (String(settingsResult).indexOf("ERROR:") === 0) return settingsResult;
-    return quickSaveSelectedClipsFromShortcut(true);
+    return quickSaveSelectedClipsFromShortcut(true, startAtIndex, confirmLongClip, saveFirstTenSeconds);
 }
 
 function confirmClipFavoriteReplacement() {

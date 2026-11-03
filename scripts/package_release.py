@@ -46,7 +46,7 @@ def main() -> int:
             raise FileNotFoundError(f"Required release file is missing: {item}")
         destination = staging / item
         if source.is_dir():
-            shutil.copytree(source, destination, ignore=shutil.ignore_patterns(".DS_Store", ".wrangler", "node_modules", "package_release.py"))
+            shutil.copytree(source, destination, ignore=shutil.ignore_patterns(".DS_Store", ".wrangler", "node_modules", "package_release.py", "install-dev.py"))
         else:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)

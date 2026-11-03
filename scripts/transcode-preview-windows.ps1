@@ -58,13 +58,20 @@ function Try-WindowsMediaTranscoder {
 function Get-PreviewFfmpeg {
   $toolRoot = Join-Path $env:LOCALAPPDATA "SceneKeeper\Tools\FFmpeg"
   $ffmpegPath = Join-Path $toolRoot "bin\ffmpeg.exe"
-  if (Test-Path -LiteralPath $ffmpegPath -PathType Leaf) { return $ffmpegPath }
+  if (Test-Path -LiteralPath $ffmpegPath -PathType Leaf) {
+    try {
+      $null = & $ffmpegPath -hide_banner -version 2>&1
+      if ($LASTEXITCODE -eq 0) { return $ffmpegPath }
+    } catch {
+      # A previous install may have copied ffmpeg.exe without its required DLLs.
+    }
+  }
 
   if (-not [Environment]::Is64BitOperatingSystem) {
     throw "Automatic HEVC preview support currently requires 64-bit Windows."
   }
 
-  Write-Output "Downloading the one-time HEVC preview component (FFmpeg) from the FFmpeg builds project..."
+  [Console]::Error.WriteLine("Downloading the one-time HEVC preview component (FFmpeg) from the FFmpeg builds project...")
   New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
   $extractRoot = Join-Path $env:TEMP ("SceneKeeper-FFmpeg-" + [Guid]::NewGuid().ToString("N"))
   $archivePath = Join-Path $extractRoot "ffmpeg-win64-lgpl.zip"
@@ -77,8 +84,19 @@ function Get-PreviewFfmpeg {
     $found = Get-ChildItem -LiteralPath $extractRoot -Filter "ffmpeg.exe" -File -Recurse | Select-Object -First 1
     if (-not $found) { throw "The downloaded FFmpeg package did not contain ffmpeg.exe." }
 
-    New-Item -ItemType Directory -Path (Join-Path $toolRoot "bin") -Force | Out-Null
-    Copy-Item -LiteralPath $found.FullName -Destination $ffmpegPath -Force
+    $toolBin = Join-Path $toolRoot "bin"
+    if (Test-Path -LiteralPath $toolBin) {
+      Remove-Item -LiteralPath $toolBin -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $toolBin -Force | Out-Null
+    Copy-Item -Path (Join-Path $found.Directory.FullName "*") -Destination $toolBin -Recurse -Force
+    if (-not (Test-Path -LiteralPath $ffmpegPath -PathType Leaf)) {
+      throw "The FFmpeg package could not be installed in the local tools folder."
+    }
+    $null = & $ffmpegPath -hide_banner -version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      throw "The installed FFmpeg converter could not start. Its required Windows components may be missing."
+    }
     $packageRoot = $found.Directory.Parent.FullName
     $license = Join-Path $packageRoot "LICENSE.txt"
     if (Test-Path -LiteralPath $license) {

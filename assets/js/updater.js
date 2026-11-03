@@ -39,7 +39,8 @@
     ],
     "1.0.35": ["License activation now uses CEP’s native HTTPS connection when the embedded panel request cannot reach the license server."],
     "1.0.36": ["On macOS, license checks can use the system HTTPS client as a fallback when After Effects’ embedded network connection times out."],
-    "1.0.37": ["On macOS, the license request now uses one bounded system-curl attempt at a time, so a blocked connection cannot keep the panel retrying for minutes."]
+    "1.0.37": ["On macOS, the license request now uses one bounded system-curl attempt at a time, so a blocked connection cannot keep the panel retrying for minutes."],
+    "1.0.38": ["HEVC/H.265 previews on Windows now recover from incomplete FFmpeg installs and include the supporting files needed for conversion."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -49,16 +50,33 @@
   let checkInFlight = false;
   let scheduledVersion = "";
   let nextCheckTimer = null;
+  let noticeHideTimer = null;
+
+  function revealNotice() {
+    if (!notice) return;
+    if (noticeHideTimer) {
+      clearTimeout(noticeHideTimer);
+      noticeHideTimer = null;
+    }
+    notice.hidden = false;
+    notice.classList.remove("is-visible");
+    void notice.offsetWidth;
+    requestAnimationFrame(() => notice.classList.add("is-visible"));
+  }
 
   if (versionLabel) {
     const currentVersion = String(config.currentVersion || "").replace(/^v/i, "");
-    versionLabel.textContent = currentVersion ? `SceneKeeper v${currentVersion}` : "SceneKeeper";
+    versionLabel.textContent = config.development
+      ? "SceneKeeper Dev"
+      : (currentVersion ? `SceneKeeper v${currentVersion}` : "SceneKeeper");
     const repository = String(config.repository || "morleyae/SceneKeeper").replace(/^https?:\/\/github\.com\//i, "").replace(/\/+$/, "");
-    versionLabel.href = `https://github.com/${repository}/releases/latest`;
+    if (config.development) versionLabel.removeAttribute("href");
+    else versionLabel.href = `https://github.com/${repository}/releases/latest`;
   }
 
   [versionLabel, creatorLink].forEach((link) => {
     if (!link) return;
+    if (config.development && link === versionLabel) return;
     link.addEventListener("click", (event) => {
       event.preventDefault();
       const cep = window.cep || window.__adobe_cep__;
@@ -232,7 +250,7 @@
       retryUpdateButton.disabled = false;
       retryUpdateButton.textContent = "Retry Update Install";
     }
-    notice.hidden = false;
+    revealNotice();
   }
 
   function showInstallerStarted(version) {
@@ -250,7 +268,7 @@
     if (!notice) return;
     if (noticeMessage) noticeMessage.textContent = String(message || "");
     else notice.textContent = String(message || "");
-    notice.hidden = false;
+    revealNotice();
   }
 
   function showUpdateProblem(message) {
@@ -266,7 +284,12 @@
     if (noticeMessage) noticeMessage.textContent = "";
     else notice.textContent = "";
     if (retryUpdateButton) retryUpdateButton.hidden = true;
-    notice.hidden = true;
+    notice.classList.remove("is-visible");
+    if (noticeHideTimer) clearTimeout(noticeHideTimer);
+    noticeHideTimer = window.setTimeout(() => {
+      notice.hidden = true;
+      noticeHideTimer = null;
+    }, 230);
   }
 
   function retryPendingInstallation() {
@@ -426,6 +449,7 @@
   }
 
   function checkForUpdates(forceCheck) {
+    if (config.development) return;
     if (checkInFlight) return;
     if (!config.repository || !config.currentVersion || !notice) return;
 
@@ -503,12 +527,14 @@
     });
   }
 
-  const previouslyInstalledVersion = readStoredVersion();
-  const pendingVersionBeforeRestore = getPendingUpdateVersion();
-  restorePendingUpdateNotice();
-  const whatsNewShown = showWhatsNew(previouslyInstalledVersion, pendingVersionBeforeRestore);
-  if (!whatsNewShown) storeCurrentVersion();
-  if (retryUpdateButton) retryUpdateButton.addEventListener("click", retryPendingInstallation);
-  if (window.SceneKeeperAppReady) checkForUpdates(true);
-  else window.addEventListener("scenekeeper-app-ready", () => checkForUpdates(true), { once: true });
+  if (!config.development) {
+    const previouslyInstalledVersion = readStoredVersion();
+    const pendingVersionBeforeRestore = getPendingUpdateVersion();
+    restorePendingUpdateNotice();
+    const whatsNewShown = showWhatsNew(previouslyInstalledVersion, pendingVersionBeforeRestore);
+    if (!whatsNewShown) storeCurrentVersion();
+    if (retryUpdateButton) retryUpdateButton.addEventListener("click", retryPendingInstallation);
+    if (window.SceneKeeperAppReady) checkForUpdates(true);
+    else window.addEventListener("scenekeeper-app-ready", () => checkForUpdates(true), { once: true });
+  }
 })();
