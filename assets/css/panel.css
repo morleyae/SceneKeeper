@@ -72,13 +72,15 @@
       right: 0;
       bottom: 0;
       left: 0;
+      box-sizing: border-box;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
       min-height: 24px;
+      height: 24px;
       margin: 0;
-      padding: 4px 9px;
+      padding: 2px 9px;
       background: var(--background);
       color: var(--muted);
       font-size: 9px;
@@ -259,6 +261,17 @@
     }
 
     .gear-toggle { font-size: 18px; }
+
+    .gear-toggle svg {
+      display: block;
+      width: 15px;
+      height: 15px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.15;
+    }
 
     .trash-toggle svg {
       display: block;
@@ -2030,14 +2043,14 @@
     #extra-clip-actions-toggle {
       display: flex;
       width: max-content;
-      min-height: 16px;
-      height: 16px;
-      margin: 4px auto 0;
-      padding: 0 4px;
+      min-height: 20px;
+      height: 20px;
+      margin: 2px auto 0;
+      padding: 1px 7px;
       border-color: transparent;
       background: transparent;
       color: var(--muted);
-      font-size: 8px;
+      font-size: 9px;
       line-height: 1;
     }
 
