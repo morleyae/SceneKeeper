@@ -3,6 +3,7 @@
   const notice = document.getElementById("scene-keeper-update-notice");
   const noticeMessage = document.getElementById("scene-keeper-update-message");
   const retryUpdateButton = document.getElementById("scene-keeper-retry-update");
+  const reopenPanelButton = document.getElementById("scene-keeper-reopen-panel");
   const versionLabel = document.getElementById("scene-keeper-version");
   const creatorLink = document.getElementById("scene-keeper-creator-link");
   const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
@@ -48,7 +49,8 @@
     "1.0.44": [
       "Import and Export now start from a full panel page with clear choices.",
       "Update completion and errors appear in the SceneKeeper panel instead of system popups; after installation, reopen the panel to load the update."
-    ]
+    ],
+    "1.0.45": ["After an update installs, use the Finish button to reload SceneKeeper and start using the new version without restarting After Effects."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -292,9 +294,10 @@
     if (result && result.err === 0 && result.data) {
       const lines = String(result.data).replace(/^\uFEFF/, "").split(/\r?\n/);
       if (lines[0] === "INSTALLED") {
-        if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is installed. Please close and reopen the SceneKeeper panel to use the newly installed version.`;
-        else if (notice) notice.textContent = `SceneKeeper ${version} is installed. Please close and reopen the SceneKeeper panel to use the newly installed version.`;
+        if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is installed. Finish the installation with the button below.`;
+        else if (notice) notice.textContent = `SceneKeeper ${version} is installed. Finish the installation with the button below.`;
         if (retryUpdateButton) retryUpdateButton.hidden = true;
+        if (reopenPanelButton) reopenPanelButton.hidden = false;
         scheduledVersion = "";
         revealNotice();
         return;
@@ -342,6 +345,7 @@
     if (noticeMessage) noticeMessage.textContent = "";
     else notice.textContent = "";
     if (retryUpdateButton) retryUpdateButton.hidden = true;
+    if (reopenPanelButton) reopenPanelButton.hidden = true;
     notice.classList.remove("is-visible");
     if (noticeHideTimer) clearTimeout(noticeHideTimer);
     noticeHideTimer = window.setTimeout(() => {
@@ -488,6 +492,19 @@
     whatsNewClose.addEventListener("click", () => {
       whatsNewDialog.hidden = true;
       storeCurrentVersion();
+    });
+  }
+
+  if (reopenPanelButton) {
+    reopenPanelButton.addEventListener("click", () => {
+      reopenPanelButton.disabled = true;
+      reopenPanelButton.textContent = "Finishing…";
+      const cep = window.__adobe_cep__;
+      const fs = window.cep && window.cep.fs;
+      const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
+      const resultPath = `${userData}/SceneKeeper/updates/pending-update.json.result`;
+      if (fs && typeof fs.writeFile === "function") fs.writeFile(resultPath, "");
+      window.setTimeout(() => window.location.reload(), 80);
     });
   }
   if (whatsNewDialog) {
