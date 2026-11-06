@@ -52,7 +52,8 @@
       "Update completion and errors appear in the SceneKeeper panel instead of system popups; after installation, reopen the panel to load the update."
     ],
     "1.0.45": ["After an update installs, use the Finish button to reload SceneKeeper and start using the new version without restarting After Effects."],
-    "1.0.47": ["Windows updates now read saved paths as UTF-8, including account names with umlauts. If the downloaded ZIP disappears, SceneKeeper automatically downloads it once more."]
+    "1.0.47": ["Windows updates now read saved paths as UTF-8, including account names with umlauts. If the downloaded ZIP disappears, SceneKeeper automatically downloads it once more."],
+    "1.0.48": ["Small test release to verify that automatic updates are detected and installed."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
