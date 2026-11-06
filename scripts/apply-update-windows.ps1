@@ -6,6 +6,11 @@ $ErrorActionPreference = "Stop"
 $logPath = "$StateFile.log"
 try { Start-Transcript -LiteralPath $logPath -Append | Out-Null } catch {}
 $resultPath = "$StateFile.result"
+function Write-UpdateProgress([string]$Message) {
+  try { Set-Content -LiteralPath $resultPath -Value @("PROGRESS", $Message) -Encoding UTF8 } catch {}
+  try { Add-Content -LiteralPath $logPath -Value "SceneKeeper update: $Message" } catch {}
+}
+Write-UpdateProgress "Installer started; reading update state."
 try {
   # CEP writes the state file as UTF-8. Windows PowerShell 5 otherwise reads
   # it using the machine's legacy code page, which corrupts paths containing
@@ -33,15 +38,19 @@ if (-not (Test-Path -LiteralPath $archive)) {
 # running from memory; close and reopen the SceneKeeper panel after installation
 # to load the new files. After Effects does not need to restart.
 try {
+  Write-UpdateProgress "Preparing a temporary extraction folder."
   $work = Join-Path $env:TEMP ([Guid]::NewGuid().ToString("N"))
   $payload = Join-Path $work "SceneKeeper"
   $backup = "$target.update-backup"
   New-Item -ItemType Directory -Path $work | Out-Null
   try {
+    Write-UpdateProgress "Extracting the update ZIP."
     Expand-Archive -LiteralPath $archive -DestinationPath $work -Force
+    Write-UpdateProgress "Checking the extracted SceneKeeper files."
     if (-not (Test-Path -LiteralPath (Join-Path $payload "CSXS\manifest.xml"))) {
       throw "The update archive does not contain a SceneKeeper CEP extension."
     }
+    Write-UpdateProgress "Replacing the installed SceneKeeper files."
     if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
     if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $backup }
     try {
@@ -50,6 +59,7 @@ try {
       if (Test-Path -LiteralPath $backup) { Move-Item -LiteralPath $backup -Destination $target }
       throw
     }
+    Write-UpdateProgress "Cleaning up temporary update files."
     if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
     Remove-Item -LiteralPath $archive -Force
     Remove-Item -LiteralPath $StateFile -Force

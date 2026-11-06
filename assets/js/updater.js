@@ -53,7 +53,8 @@
     ],
     "1.0.45": ["After an update installs, use the Finish button to reload SceneKeeper and start using the new version without restarting After Effects."],
     "1.0.47": ["Windows updates now read saved paths as UTF-8, including account names with umlauts. If the downloaded ZIP disappears, SceneKeeper automatically downloads it once more."],
-    "1.0.48": ["Small test release to verify that automatic updates are detected and installed."]
+    "1.0.48": ["Small test release to verify that automatic updates are detected and installed."],
+    "1.0.49": ["Windows update installation now reports each step, so a blocked or stalled installer is easier to diagnose."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -292,7 +293,7 @@
     revealNotice();
   }
 
-  function monitorInstallResult(version, startedAt) {
+  function monitorInstallResult(version, startedAt, lastProgress) {
     const cep = window.__adobe_cep__;
     const fs = window.cep && window.cep.fs;
     const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
@@ -300,6 +301,14 @@
     const result = fs && typeof fs.readFile === "function" ? fs.readFile(resultPath) : null;
     if (result && result.err === 0 && result.data) {
       const lines = String(result.data).replace(/^\uFEFF/, "").split(/\r?\n/);
+      if (lines[0] === "PROGRESS") {
+        const progress = lines.slice(1).join(" ").trim();
+        if (progress) {
+          lastProgress = progress;
+          if (noticeMessage) noticeMessage.textContent = `Installing ${version}: ${progress}`;
+          else if (notice) notice.textContent = `Installing ${version}: ${progress}`;
+        }
+      }
       if (lines[0] === "INSTALLED") {
         if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is installed. Finish the installation with the button below.`;
         else if (notice) notice.textContent = `SceneKeeper ${version} is installed. Finish the installation with the button below.`;
@@ -336,7 +345,7 @@
     }
 
     if (Date.now() - startedAt >= 5 * 60 * 1000) {
-      setNoticeMessage(`SceneKeeper ${version} installation could not be confirmed. You can retry the installation.`);
+      setNoticeMessage(`SceneKeeper ${version} installation did not finish within 5 minutes${lastProgress ? ` (last step: ${lastProgress})` : "; the Windows installer did not report that it started"}. Check the installer log, then retry.`);
       if (retryUpdateButton) {
         retryUpdateButton.hidden = false;
         retryUpdateButton.disabled = false;
@@ -345,7 +354,7 @@
       scheduledVersion = "";
       return;
     }
-    window.setTimeout(() => monitorInstallResult(version, startedAt), 1000);
+    window.setTimeout(() => monitorInstallResult(version, startedAt, lastProgress), 1000);
   }
 
   function startInstallResultMonitor(version) {
