@@ -39,13 +39,14 @@ try {
   $archive = $stateLines[0].TrimEnd("`r")
   $target = $stateLines[1].TrimEnd("`r")
   $version = $stateLines[2].TrimEnd("`r")
+  Write-UpdateLog "Resolved install target: $target"
 } catch {
   $message = "Could not read the update state file as UTF-8: $($_.Exception.Message)"
   Write-UpdateResult "ERROR" $message | Out-Null
   Write-UpdateLog $message
   exit 2
 }
-if (-not (Test-Path -LiteralPath $archive)) {
+if (-not [System.IO.File]::Exists($archive)) {
   $message = "The downloaded update ZIP was not found at its saved path. It may have been removed or blocked by security software; retry to download it again."
   Write-UpdateLog "Expected update archive path: $archive"
   Write-UpdateResult "ERROR" $message | Out-Null
@@ -57,35 +58,38 @@ if (-not (Test-Path -LiteralPath $archive)) {
 # to load the new files. After Effects does not need to restart.
 try {
   Write-UpdateProgress "Preparing a temporary extraction folder."
-  $extensionParent = Split-Path -Parent $target
-  $work = Join-Path $extensionParent (".SceneKeeper-update-" + [Guid]::NewGuid().ToString("N"))
-  $payload = Join-Path $work "SceneKeeper"
+  $extensionParent = [System.IO.Path]::GetDirectoryName($target)
+  if (-not [System.IO.Directory]::Exists($extensionParent)) {
+    throw "The SceneKeeper install parent folder does not exist: $extensionParent"
+  }
+  $work = [System.IO.Path]::Combine($extensionParent, ".SceneKeeper-update-" + [Guid]::NewGuid().ToString("N"))
+  $payload = [System.IO.Path]::Combine($work, "SceneKeeper")
   $backup = "$target.update-backup-" + [Guid]::NewGuid().ToString("N")
-  New-Item -ItemType Directory -Path $work | Out-Null
+  [System.IO.Directory]::CreateDirectory($work) | Out-Null
   try {
     Write-UpdateProgress "Extracting the update ZIP."
     Expand-Archive -LiteralPath $archive -DestinationPath $work -Force
     Write-UpdateProgress "Checking the extracted SceneKeeper files."
-    if (-not (Test-Path -LiteralPath (Join-Path $payload "CSXS\manifest.xml"))) {
+    if (-not [System.IO.File]::Exists([System.IO.Path]::Combine($payload, "CSXS\manifest.xml"))) {
       throw "The update archive does not contain a SceneKeeper CEP extension."
     }
     Write-UpdateProgress "Moving the installed SceneKeeper folder aside."
-    if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $backup -ErrorAction Stop }
+    if ([System.IO.Directory]::Exists($target)) { [System.IO.Directory]::Move($target, $backup) }
     Write-UpdateProgress "Placing the new SceneKeeper folder."
     try {
-      Move-Item -LiteralPath $payload -Destination $target -ErrorAction Stop
+      [System.IO.Directory]::Move($payload, $target)
     } catch {
-      if (Test-Path -LiteralPath $backup) { Move-Item -LiteralPath $backup -Destination $target -ErrorAction Stop }
+      if ([System.IO.Directory]::Exists($backup)) { [System.IO.Directory]::Move($backup, $target) }
       throw
     }
     Write-UpdateProgress "Cleaning up the previous installation and download."
-    if (Test-Path -LiteralPath $backup) {
-      try { Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction Stop }
+    if ([System.IO.Directory]::Exists($backup)) {
+      try { [System.IO.Directory]::Delete($backup, $true) }
       catch { Write-UpdateLog "Could not remove old installation backup: $($_.Exception.Message)" }
     }
-    try { Remove-Item -LiteralPath $archive -Force -ErrorAction Stop }
+    try { [System.IO.File]::Delete($archive) }
     catch { Write-UpdateLog "Could not remove downloaded ZIP: $($_.Exception.Message)" }
-    try { Remove-Item -LiteralPath $StateFile -Force -ErrorAction Stop }
+    try { [System.IO.File]::Delete($StateFile) }
     catch { Write-UpdateLog "Could not remove installer state file: $($_.Exception.Message)" }
   } catch {
     $failureMessage = "Step '$script:currentStage' failed: $($_.Exception.Message)"
@@ -93,8 +97,8 @@ try {
     Write-UpdateLog "SceneKeeper update failed: $failureMessage"
     throw
   } finally {
-    if ($work -and (Test-Path -LiteralPath $work)) {
-      try { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop }
+    if ($work -and [System.IO.Directory]::Exists($work)) {
+      try { [System.IO.Directory]::Delete($work, $true) }
       catch { Write-UpdateLog "Could not remove temporary extraction folder: $($_.Exception.Message)" }
     }
   }

@@ -57,7 +57,8 @@
     "1.0.49": ["Windows update installation now reports each step, so a blocked or stalled installer is easier to diagnose."],
     "1.0.50": ["Windows update failures now include the installer's last log lines and report when PowerShell cannot write its result."],
     "1.0.51": ["Small test release to verify automatic update detection and installation."],
-    "1.0.52": ["The Windows updater extracts beside the extension for a same-drive folder swap and reports each replacement step separately."]
+    "1.0.52": ["The Windows updater extracts beside the extension for a same-drive folder swap and reports each replacement step separately."],
+    "1.0.53": ["Windows updates now use the known per-user CEP install path and direct Unicode-safe file operations."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -200,15 +201,18 @@
       return callback(new Error("Automatic update installation is unavailable on this CEP runtime"));
     }
 
-    const extensionPath = normalizePath(cep.getSystemPath("extension"));
+    const runningExtensionPath = normalizePath(cep.getSystemPath("extension"));
     const userData = normalizePath(cep.getSystemPath("userData"));
+    const isWindows = /win/i.test(navigator.platform || navigator.userAgent);
+    const installTarget = isWindows
+      ? `${userData}/Adobe/CEP/extensions/SceneKeeper`
+      : runningExtensionPath;
     const updateDirectory = `${userData}/SceneKeeper/updates`;
-    if (!extensionPath || !userData || !makeDirectory(`${userData}/SceneKeeper`) || !makeDirectory(updateDirectory)) {
+    if (!runningExtensionPath || !installTarget || !userData || !makeDirectory(`${userData}/SceneKeeper`) || !makeDirectory(updateDirectory)) {
       return callback(new Error("Could not prepare the update folder"));
     }
 
-    const isWindows = /win/i.test(navigator.platform || navigator.userAgent);
-    const helperSource = `${extensionPath}/scripts/apply-update-${isWindows ? "windows.ps1" : "macos.sh"}`;
+    const helperSource = `${runningExtensionPath}/scripts/apply-update-${isWindows ? "windows.ps1" : "macos.sh"}`;
     const helperResult = fs.readFile(helperSource);
     if (!helperResult || helperResult.err !== 0 || !helperResult.data) {
       return callback(new Error("The update installer script is missing"));
@@ -220,7 +224,7 @@
     if (typeof fs.deleteFile === "function") {
       try { fs.deleteFile(resultPath); } catch (error) {}
     }
-    const state = `${archivePath}\n${extensionPath}\n${version}\n`;
+    const state = `${archivePath}\n${installTarget}\n${version}\n`;
     const utf8Encoding = window.cep && window.cep.encoding && window.cep.encoding.UTF8;
     const stateWritten = utf8Encoding === undefined
       ? writeFile(statePath, state)
