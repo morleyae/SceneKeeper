@@ -58,7 +58,8 @@
     "1.0.50": ["Windows update failures now include the installer's last log lines and report when PowerShell cannot write its result."],
     "1.0.51": ["Small test release to verify automatic update detection and installation."],
     "1.0.52": ["The Windows updater extracts beside the extension for a same-drive folder swap and reports each replacement step separately."],
-    "1.0.53": ["Windows updates now use the known per-user CEP install path and direct Unicode-safe file operations."]
+    "1.0.53": ["Windows updates now use the known per-user CEP install path and direct Unicode-safe file operations."],
+    "1.0.54": ["Small test release to verify automatic update detection and installation."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
