@@ -13,6 +13,8 @@
       --accent: #4b9fe1;
       --accent-ink: #101820;
       --danger: #d77d76;
+      --menu-spacing: 6px;
+      --menu-action-height: 36px;
     }
 
     * { box-sizing: border-box; }
@@ -433,6 +435,8 @@
 
     .clip-trash-list {
       display: grid;
+      align-content: start;
+      grid-auto-rows: max-content;
       max-height: 50vh;
       gap: 5px;
       overflow-y: auto;
@@ -476,9 +480,7 @@
       font-size: 10px;
     }
 
-    .clip-trash-actions {
-      margin-top: 9px;
-    }
+    .clip-trash-actions { margin-top: 8px; }
 
     #clip-trash-modal .clip-trash-actions > button {
       min-height: 26px;
@@ -494,6 +496,8 @@
 
     .missing-footage-list {
       display: grid;
+      align-content: start;
+      grid-auto-rows: max-content;
       max-height: 50vh;
       gap: 5px;
       overflow-y: auto;
@@ -752,7 +756,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      margin: 0 0 10px;
+      margin: 0 0 8px;
     }
     .settings-modal-heading h2 { margin: 0; }
     .settings-modal-heading .settings-close {
@@ -763,7 +767,7 @@
     .settings-actions {
       display: flex;
       gap: 6px;
-      margin-top: 12px;
+      margin-top: 8px;
       justify-content: flex-end;
     }
     .settings-actions button {
@@ -1022,7 +1026,7 @@
 
     .library-data-options {
       display: grid;
-      gap: 10px;
+      gap: 8px;
       margin-top: 8px;
     }
 
@@ -1491,9 +1495,12 @@
     }
 
     .search-input {
+      min-height: 33px;
       margin-bottom: 0;
       padding-right: 36px;
     }
+
+    .search-input:focus { border-color: var(--accent); }
 
     input[type="search"]::-webkit-search-cancel-button,
     input[type="search"]::-webkit-search-decoration {
@@ -1554,7 +1561,7 @@
       height: auto;
       min-height: 0;
       max-height: none;
-      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
       align-content: start;
       gap: 5px;
       padding: 5px 5px 190px;
@@ -1565,10 +1572,22 @@
       padding: 5px 5px 190px;
     }
 
+    .favorite-results.favorite-clip-grid.home-dashboard {
+      display: block;
+      padding: 7px 7px 190px;
+    }
+
+    .home-dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+      align-content: start;
+      gap: 5px;
+    }
+
     .favorite-footage-folder-grid,
     .favorite-footage-group-items {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
       align-content: start;
       gap: 5px;
     }
@@ -1576,14 +1595,15 @@
     .favorite-footage-group { margin: 0 0 7px; }
 
     .favorite-results.favorite-clip-grid.landscape-clip-previews {
-      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
     }
 
-    @media (max-width: 244px) {
+    @media (max-width: 214px) {
       .favorite-results.favorite-clip-grid,
       .favorite-results.favorite-clip-grid.landscape-clip-previews,
       .favorite-footage-folder-grid,
-      .favorite-footage-group-items {
+      .favorite-footage-group-items,
+      .home-dashboard-grid {
         grid-template-columns: minmax(0, 1fr);
       }
     }
@@ -1598,19 +1618,21 @@
 
     .favorite-footage-group-heading {
       display: flex;
-      width: calc(100% - 2px);
+      width: 100%;
       flex-direction: column;
       align-items: flex-start;
       min-width: 0;
-      margin: 3px 1px 0;
-      padding: 4px 4px 3px;
+      min-height: 24px;
+      height: auto;
+      margin: 2px 0 0;
+      padding: 3px 6px 2px;
       background: transparent;
       border: 0;
-      border-bottom: 1px solid rgba(255,255,255,0.14);
+      border-radius: 3px 3px 0 0;
       color: var(--muted);
       font-size: 10px;
       font-weight: 700;
-      line-height: 1.25;
+      line-height: 1.15;
       text-align: left;
       cursor: pointer;
     }
@@ -1618,26 +1640,17 @@
     .favorite-footage-group-heading:hover,
     .favorite-footage-group-heading:focus-visible {
       color: var(--text);
-      background: rgba(255,255,255,0.045);
+      background: rgba(255,255,255,0.025);
       outline: none;
     }
 
-    .favorite-footage-group-title,
-    .favorite-footage-original-name {
+    .favorite-footage-group-title {
       display: block;
       width: 100%;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-
-    .favorite-footage-original-name {
-      margin-top: 2px;
-      color: var(--muted);
-      font-size: 9px;
-      font-weight: 500;
-      opacity: 0.82;
     }
 
     .favorite-result {
@@ -1752,15 +1765,6 @@
     .favorite-clip-grid .favorite-result-details {
       margin-top: -1px;
       color: #ededed;
-    }
-
-    .favorite-result-insert-count {
-      position: relative;
-      z-index: 1;
-      color: #ffffff;
-      font-size: 9px;
-      font-variant-numeric: tabular-nums;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.95), 0 0 7px rgba(0,0,0,0.9);
     }
 
     .favorite-clip-grid .favorite-result[aria-pressed="true"] {
@@ -2128,6 +2132,8 @@
     .extra-clip-actions[hidden] { display: none; }
     .extra-clip-actions {
       position: absolute;
+      display: grid;
+      gap: 6px;
       z-index: 2;
       right: 0;
       bottom: calc(100% + 6px);
@@ -2150,14 +2156,25 @@
       pointer-events: auto;
     }
 
+    .extra-clip-actions > #save-to-folder-open,
     .extra-clip-actions > #random-marker-insert-open { width: 100%; }
+    .extra-clip-actions > #save-to-folder-open {
+      min-height: 32px;
+      height: 32px;
+      margin: 0;
+      padding: 4px 2px;
+      font-size: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
 
     .primary-clip-actions { margin: 0; }
 
     #random-marker-insert-open {
       min-height: 32px;
       height: 32px;
-      margin-top: 6px;
+      margin: 0;
       padding: 4px 2px;
       font-size: 10px;
       line-height: 1.15;
@@ -2468,6 +2485,20 @@
 
     .library-context-menu button:hover { background: rgba(75,159,225,0.16); }
     .library-context-menu button.danger { color: var(--danger); }
+
+    .library-context-menu-info {
+      display: grid;
+      gap: 2px;
+      max-width: min(280px, calc(100vw - 24px));
+      padding: 6px 8px 7px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .library-context-menu-info strong { color: var(--text); font-size: 10px; }
 
     .rename-dialog-content input { margin-bottom: 8px; }
 
@@ -3478,6 +3509,8 @@
       margin-bottom: 6px;
     }
 
+    #export-folder-toolbar[hidden] { display: none; }
+
     .save-clip-toolbar .compact {
       flex: 0 0 auto;
       margin: 0;
@@ -3659,7 +3692,7 @@
     .confirm-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 7px;
+      gap: var(--menu-spacing);
     }
 
     .save-clip-actions {
@@ -3689,9 +3722,9 @@
 
     /* Give full-panel dialogs controls sized for the space they occupy. */
     .confirm-box.panel-fullscreen-modal .confirm-actions > button {
-      min-height: 40px;
+      min-height: var(--menu-action-height);
       margin-top: 0;
-      padding: 8px 12px;
+      padding: 6px 10px;
       font-size: 12px;
     }
 
@@ -3807,11 +3840,11 @@
       min-height: 20px;
       height: 20px;
     }
-    #export-data-confirmation .export-choice-actions { gap: 5px; }
+    #export-data-confirmation .export-choice-actions { gap: var(--menu-spacing); }
     #export-data-confirmation .export-choice-actions > button {
-      min-height: 28px;
-      padding: 4px 7px;
-      font-size: 10px;
+      min-height: var(--menu-action-height);
+      padding: 6px 8px;
+      font-size: 11px;
     }
 
     #clip-trash-modal .clip-trash-item-name,
@@ -3820,7 +3853,11 @@
     #missing-footage-modal .missing-footage-copy small { font-size: 11px; }
     #clip-trash-modal .clip-trash-item button,
     #missing-footage-modal .missing-footage-entry button { min-height: 36px; font-size: 11px; }
-    #clip-trash-modal .clip-trash-actions > button,
+    #clip-trash-modal .clip-trash-actions > button {
+      min-height: var(--menu-action-height);
+      padding: 6px 10px;
+      font-size: 11px;
+    }
     #clip-trash-modal .clip-trash-item button {
       min-height: 26px;
       padding: 4px 7px;
@@ -3855,4 +3892,41 @@
         white-space: normal;
         overflow-wrap: anywhere;
       }
+    }
+
+    /* Keep the rounded-control prototype scoped to SceneKeeper Dev. */
+    html.scene-keeper-dev-rounded button,
+    html.scene-keeper-dev-rounded input,
+    html.scene-keeper-dev-rounded select {
+      border-radius: 5px;
+    }
+
+    html.scene-keeper-dev-rounded .favorite-footage-group-heading {
+      border-radius: 3px 3px 0 0;
+    }
+
+    html.scene-keeper-dev-rounded .help-toggle,
+    html.scene-keeper-dev-rounded .panel-fullscreen-close {
+      border-radius: 50%;
+    }
+
+    html.scene-keeper-dev-rounded #settings-modal .settings-close {
+      border-radius: 50%;
+    }
+
+    html.scene-keeper-dev-rounded .search-clear {
+      top: 50%;
+      bottom: auto;
+      border-radius: 50%;
+      transform: translateY(-50%);
+    }
+
+    .settings-modal-heading h2,
+    .help-modal-content h2,
+    .clip-trash-modal-content h2,
+    .clip-reorder-modal-content h2,
+    .panel-fullscreen-content > h2,
+    .save-clip-dialog-title {
+      font-size: 16px;
+      line-height: 1.25;
     }

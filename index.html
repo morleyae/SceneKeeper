@@ -281,9 +281,13 @@
         <button id="export-folder-mode-button" class="secondary compact" type="button" aria-pressed="true">Folders</button>
         <button id="export-footage-mode-button" class="secondary compact" type="button" aria-pressed="false">Footage</button>
       </div>
+      <div id="export-folder-toolbar" class="save-clip-toolbar export-folder-toolbar" hidden>
+        <nav id="export-folder-breadcrumb" class="save-clip-breadcrumb" aria-label="Export folder location"></nav>
+        <span id="export-folder-selection-count" class="save-clip-folder-details"></span>
+      </div>
       <input id="export-choice-search" class="export-choice-search" type="search" aria-label="Search footage" placeholder="Search footage...">
       <div id="export-footage-choice-list" class="export-footage-choice-list"></div>
-      <div class="confirm-actions export-choice-actions" style="margin-top: 7px;">
+      <div class="confirm-actions export-choice-actions" style="margin-top: 6px;">
         <button id="export-selected-footage-button" type="button">Export Selected</button>
         <button id="export-all-data-button" class="secondary" type="button">Export All</button>
         <button id="cancel-export-data-button" class="secondary export-choice-cancel" type="button">Cancel</button>
@@ -327,7 +331,7 @@
     </div>
     <p id="result" role="status" aria-live="polite"></p>
     <div class="search-field">
-      <input class="search-input" id="library-search" type="search" aria-label="Search for folders or clips" placeholder="Search for folders or clips">
+      <input class="search-input" id="library-search" type="search" aria-label="Search folders and clips" placeholder="Search folders and clips…">
       <button class="search-clear" id="clear-library-search" type="button" aria-label="Clear search" title="Clear search" hidden>×</button>
     </div>
     <div class="library-tab-row">
@@ -345,8 +349,6 @@
         <div id="clip-sort-menu" class="clip-sort-menu" role="menu" aria-label="Sort clips" hidden>
           <button type="button" role="menuitemradio" data-sort-mode="footage" aria-checked="true"><span>Footage and In point</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
           <button type="button" role="menuitemradio" data-sort-mode="manual" aria-checked="false"><span>Manual order</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
-          <button type="button" role="menuitemradio" data-sort-mode="inserted" aria-checked="false"><span>Most inserted</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
-          <button type="button" role="menuitemradio" data-sort-mode="leastInserted" aria-checked="false"><span>Least inserted</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
           <button type="button" role="menuitemradio" data-sort-mode="recent" aria-checked="false"><span>Recently added</span><span class="clip-sort-check" aria-hidden="true">✓</span></button>
         </div>
       </div>
@@ -413,6 +415,7 @@
             <button id="replace-selected-clip-open" class="secondary" type="button">Replace Selected Clips</button>
             <button id="quick-replace-selected-clip" class="secondary" type="button" title="Replace selected clip layers using clips from the same saved folder">Quick Replace</button>
           </div>
+          <button id="save-to-folder-open" class="secondary" type="button" title="Choose a folder for this save only">Save to</button>
           <button id="random-marker-insert-open" class="secondary" type="button">Random Clips Between Markers</button>
         </div>
         <button id="extra-clip-actions-toggle" class="secondary" type="button" aria-expanded="false" aria-controls="extra-clip-actions">More actions <span aria-hidden="true">▾</span></button>
@@ -422,7 +425,7 @@
       <div class="confirm-box-content random-marker-dialog-content panel-fullscreen-content">
         <div class="random-marker-title-row">
           <h2 id="random-marker-insert-title" class="save-clip-dialog-title">Random clips between markers</h2>
-          <button id="random-marker-insert-help" class="random-marker-help" type="button" data-tooltip="Finds markers in the active composition and inserts one random saved clip between each consecutive pair. Clips are trimmed to fit." aria-label="About inserting random clips between markers">?</button>
+          <button id="random-marker-insert-help" class="random-marker-help" type="button" data-tooltip="Uses markers on the selected layer, or composition markers when no layer is selected. It inserts one random saved clip between each consecutive pair and trims clips to fit." aria-label="About inserting random clips between markers">?</button>
         </div>
         <div class="random-marker-setting">
           <span>Clip source · Choose folders</span>

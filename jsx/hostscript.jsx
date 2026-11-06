@@ -2587,13 +2587,15 @@ function getSceneKeeperQuickSaveStatus() {
             : "");
 }
 
-function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, confirmLongClip, saveFirstTenSeconds) {
+function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, confirmLongClip, saveFirstTenSeconds, folderIdOverride, savePositionOverride, saveScaleOverride, saveAudioOverride) {
     var comp = getActiveComp();
     if (!comp) return "ERROR: Select footage clips in an active composition first.";
-    if (!app.settings.haveSetting("SceneKeeper Quick Save", "FolderId")) {
+    if (typeof folderIdOverride !== "string" && !app.settings.haveSetting("SceneKeeper Quick Save", "FolderId")) {
         return "ERROR: Open a collection folder in SceneKeeper before using Quick Save.";
     }
-    var folderId = app.settings.getSetting("SceneKeeper Quick Save", "FolderId");
+    var folderId = typeof folderIdOverride === "string"
+        ? folderIdOverride
+        : app.settings.getSetting("SceneKeeper Quick Save", "FolderId");
     if (!folderId) return "ERROR: The currently open SceneKeeper location is Home. Open a collection folder and try again.";
     var folders = readClipFolderRecords();
     var folderExists = false;
@@ -2609,12 +2611,18 @@ function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, co
 
     var selectedLayers = comp.selectedLayers || [];
     if (!selectedLayers.length) return "ERROR: Select one or more footage layers first.";
-    var savePosition = !app.settings.haveSetting("SceneKeeper Quick Save", "SavePosition") ||
-        app.settings.getSetting("SceneKeeper Quick Save", "SavePosition") !== "0";
-    var saveScale = !app.settings.haveSetting("SceneKeeper Quick Save", "SaveScale") ||
-        app.settings.getSetting("SceneKeeper Quick Save", "SaveScale") !== "0";
-    var saveAudio = app.settings.haveSetting("SceneKeeper Quick Save", "SaveAudio") &&
-        app.settings.getSetting("SceneKeeper Quick Save", "SaveAudio") === "1";
+    var savePosition = typeof savePositionOverride === "boolean"
+        ? savePositionOverride
+        : (!app.settings.haveSetting("SceneKeeper Quick Save", "SavePosition") ||
+        app.settings.getSetting("SceneKeeper Quick Save", "SavePosition") !== "0");
+    var saveScale = typeof saveScaleOverride === "boolean"
+        ? saveScaleOverride
+        : (!app.settings.haveSetting("SceneKeeper Quick Save", "SaveScale") ||
+        app.settings.getSetting("SceneKeeper Quick Save", "SaveScale") !== "0");
+    var saveAudio = typeof saveAudioOverride === "boolean"
+        ? saveAudioOverride
+        : (app.settings.haveSetting("SceneKeeper Quick Save", "SaveAudio") &&
+        app.settings.getSetting("SceneKeeper Quick Save", "SaveAudio") === "1");
     var savedCount = 0;
     var failures = [];
     var longClipWarnings = [];
@@ -2671,6 +2679,18 @@ function quickSaveSelectedClipsToFolder(encodedFolderId, savePosition, saveScale
     var settingsResult = storeClipQuickSaveShortcutSettings(encodedFolderId, savePosition, saveScale, saveAudioState);
     if (String(settingsResult).indexOf("ERROR:") === 0) return settingsResult;
     return quickSaveSelectedClipsFromShortcut(true, startAtIndex, confirmLongClip, saveFirstTenSeconds);
+}
+
+function saveSelectedClipsToFolderOnce(encodedFolderId, savePosition, saveScale, saveAudioState, startAtIndex, confirmLongClip, saveFirstTenSeconds) {
+    var folderId;
+    try {
+        folderId = decodeURIComponent(encodedFolderId || "");
+    } catch (decodeError) {
+        return "ERROR: The selected save folder is invalid.";
+    }
+    return quickSaveSelectedClipsFromShortcut(
+        true, startAtIndex, confirmLongClip, saveFirstTenSeconds,
+        folderId, savePosition === true, saveScale === true, saveAudioState === true);
 }
 
 function confirmClipFavoriteReplacement() {
@@ -3601,12 +3621,35 @@ function isLikelyBeatMarkerName(name) {
     return /^\d+(?:\.\d+)?$/.test(trimmedName) || /beat/i.test(trimmedName);
 }
 
+function sceneGetRandomMarkerSource(comp) {
+    var selectedLayers = comp && comp.selectedLayers ? comp.selectedLayers : [];
+    if (selectedLayers.length > 1) {
+        return { error: "Select one layer to use its markers, or deselect all layers to use composition markers." };
+    }
+    if (selectedLayers.length === 1) {
+        var markerProperty = null;
+        try { markerProperty = selectedLayers[0].property("ADBE Marker"); } catch (markerMatchNameError) {}
+        if (!markerProperty) {
+            try { markerProperty = selectedLayers[0].property("Marker"); } catch (markerDisplayNameError) {}
+        }
+        if (!markerProperty) {
+            return { error: "Could not read markers from the selected layer. Deselect it to use composition markers." };
+        }
+        return { property: markerProperty, type: "layer", name: selectedLayers[0].name };
+    }
+    return { property: comp ? comp.markerProperty : null, type: "composition", name: comp ? comp.name : "composition" };
+}
+
 function getRandomMarkerSkipSuggestions() {
     var comp = getActiveComp();
-    if (!comp || !comp.markerProperty || comp.markerProperty.numKeys < 3) {
+    if (!comp) {
         return "MARKER_SKIP_SUGGESTIONS|";
     }
-    var markerProperty = comp.markerProperty;
+    var markerSource = sceneGetRandomMarkerSource(comp);
+    if (markerSource.error || !markerSource.property || markerSource.property.numKeys < 3) {
+        return "MARKER_SKIP_SUGGESTIONS|";
+    }
+    var markerProperty = markerSource.property;
     var markers = [];
     var i;
     for (i = 1; i <= markerProperty.numKeys; i++) {
@@ -3639,12 +3682,15 @@ function getRandomMarkerSkipSuggestions() {
 
 function getRandomMarkerNames() {
     var comp = getActiveComp();
-    if (!comp || !comp.markerProperty) return "MARKER_NAMES|%5B%5D";
+    if (!comp) return "MARKER_NAMES|%5B%5D";
+    var markerSource = sceneGetRandomMarkerSource(comp);
+    if (markerSource.error || !markerSource.property) return "MARKER_NAMES|%5B%5D";
+    var markerProperty = markerSource.property;
     var names = [];
     var seen = {};
-    for (var i = 1; i <= comp.markerProperty.numKeys; i++) {
+    for (var i = 1; i <= markerProperty.numKeys; i++) {
         var name = "";
-        try { name = String(comp.markerProperty.keyValue(i).comment || "").replace(/^\s+|\s+$/g, ""); } catch (e) {}
+        try { name = String(markerProperty.keyValue(i).comment || "").replace(/^\s+|\s+$/g, ""); } catch (e) {}
         if (!name) continue;
         var key = "$" + name.toLowerCase();
         if (seen[key]) continue;
@@ -3724,9 +3770,11 @@ function insertRandomClipsBetweenMarkers(encodedFolderId, createPrecomps, encode
     if (!comp) {
         return "ERROR: Select an active composition first.";
     }
-    var markerProperty = comp.markerProperty;
+    var markerSource = sceneGetRandomMarkerSource(comp);
+    if (markerSource.error) return "ERROR: " + markerSource.error;
+    var markerProperty = markerSource.property;
     if (!markerProperty || markerProperty.numKeys < 2) {
-        return "ERROR: Add at least two composition markers to define an interval.";
+        return "ERROR: Add at least two markers to the " + markerSource.type + " to define an interval.";
     }
     var folderId;
     try { folderId = sceneReadRandomMarkerFolderSelection(encodedFolderId); }
@@ -3794,7 +3842,7 @@ function insertRandomClipsBetweenMarkers(encodedFolderId, createPrecomps, encode
     }
     markerTimes.sort(function (first, second) { return first - second; });
     if (markerTimes.length < 2) {
-        return "ERROR: At least two composition markers must remain after skipping the selected names.";
+        return "ERROR: At least two " + markerSource.type + " markers must remain after skipping the selected names.";
     }
 
     var placements = [];

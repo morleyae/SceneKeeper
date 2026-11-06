@@ -1,4 +1,7 @@
 
+    if (window.SceneKeeperUpdateConfig && window.SceneKeeperUpdateConfig.development) {
+      document.documentElement.classList.add("scene-keeper-dev-rounded");
+    }
     const result = document.getElementById("result");
     const panelTooltip = document.getElementById("panel-tooltip");
     const panelFullscreenCloseButton = document.getElementById("panel-fullscreen-close");
@@ -125,6 +128,7 @@
     const insertFavoriteButton = document.getElementById("insert-favorite-button");
     const extraClipActionsToggle = document.getElementById("extra-clip-actions-toggle");
     const extraClipActions = document.getElementById("extra-clip-actions");
+    const saveToFolderOpenButton = document.getElementById("save-to-folder-open");
     const randomMarkerInsertOpenButton = document.getElementById("random-marker-insert-open");
     const replaceSelectedClipOpenButton = document.getElementById("replace-selected-clip-open");
     const quickReplaceSelectedClipButton = document.getElementById("quick-replace-selected-clip");
@@ -165,10 +169,14 @@
     const randomMarkerReplaceDoneButton = document.getElementById("random-marker-replace-done");
     const exportDataConfirmation = document.getElementById("export-data-confirmation");
     const libraryDataPage = document.getElementById("library-data-page");
+    const libraryDataPageCloseButton = document.getElementById("library-data-page-close");
     const exportLibraryOpenButton = document.getElementById("export-library-open");
     const importLibraryOpenButton = document.getElementById("import-library-open");
     const exportFootageChoiceList = document.getElementById("export-footage-choice-list");
     const exportChoiceSearch = document.getElementById("export-choice-search");
+    const exportFolderToolbar = document.getElementById("export-folder-toolbar");
+    const exportFolderBreadcrumb = document.getElementById("export-folder-breadcrumb");
+    const exportFolderSelectionCount = document.getElementById("export-folder-selection-count");
     const exportSelectedFootageButton = document.getElementById("export-selected-footage-button");
     const exportAllDataButton = document.getElementById("export-all-data-button");
     const exportFootageModeButton = document.getElementById("export-footage-mode-button");
@@ -322,6 +330,7 @@
     let saveClipPickerFolderId = "";
     let saveClipSelectedFolderId = "";
     let saveClipCurrentFolderId = "";
+    let saveClipDestinationOnlyMode = false;
     const expandedSaveClipFolderIds = new Set();
     const collapsedSaveClipSearchFolderIds = new Set();
     let pendingClipReplacementIndex = null;
@@ -329,6 +338,7 @@
     let exportSelectedFootagePaths = [];
     let exportSelectedFolderIds = [];
     let exportSelectionMode = "folders";
+    let exportPickerFocusFolderId = "";
     let exportChoiceSearchQuery = "";
     const expandedExportFolderIds = new Set();
     let pendingDeleteIndex = null;
@@ -1026,7 +1036,7 @@
     try {
       clipTrackingData = JSON.parse(window.localStorage.getItem(CLIP_TRACKING_STORAGE_KEY) || "{}") || {};
       const storedSortMode = window.localStorage.getItem(CLIP_SORT_MODE_STORAGE_KEY);
-      if (["manual", "inserted", "leastInserted", "recent", "footage"].includes(storedSortMode)) clipSortMode = storedSortMode;
+      if (["manual", "recent", "footage"].includes(storedSortMode)) clipSortMode = storedSortMode;
     } catch (error) {
       clipTrackingData = {};
     }
@@ -1041,9 +1051,7 @@
     function getClipTrackingData(record) {
       const data = clipTrackingData[getClipTrackingKey(record)] || {};
       return {
-        insertCount: Number.isFinite(Number(data.insertCount)) ? Math.max(0, Number(data.insertCount)) : 0,
-        addedAt: Number.isFinite(Number(data.addedAt)) ? Number(data.addedAt) : 0,
-        randomRank: Number.isFinite(Number(data.randomRank)) ? Number(data.randomRank) : 0
+        addedAt: Number.isFinite(Number(data.addedAt)) ? Number(data.addedAt) : 0
       };
     }
 
@@ -1057,26 +1065,21 @@
 
     function initializeClipTrackingData() {
       const now = Date.now();
+      Object.keys(clipTrackingData).forEach((key) => {
+        const data = clipTrackingData[key];
+        if (!data || typeof data !== "object") return;
+        delete data.insertCount;
+        delete data.randomRank;
+      });
       favoriteRecords.forEach((record, index) => {
         const key = getClipTrackingKey(record);
         const data = clipTrackingData[key] || {};
         if (!Number.isFinite(Number(data.addedAt)) || !Number(data.addedAt)) {
           data.addedAt = now - (favoriteRecords.length - index) * 1000;
         }
-        if (!Number.isFinite(Number(data.insertCount))) data.insertCount = 0;
-        if (!Number.isFinite(Number(data.randomRank))) data.randomRank = Math.random();
         clipTrackingData[key] = data;
       });
       saveClipTrackingData();
-    }
-
-    function incrementClipInsertCount(record) {
-      const key = getClipTrackingKey(record);
-      const data = clipTrackingData[key] || { addedAt: Date.now(), randomRank: Math.random() };
-      data.insertCount = Math.max(0, Number(data.insertCount) || 0) + 1;
-      clipTrackingData[key] = data;
-      saveClipTrackingData();
-      renderFavoriteClips();
     }
 
     function insertFavoriteRecord(record, onSuccess) {
@@ -1085,7 +1088,6 @@
           setResult(response.substring(6), "error");
           return;
         }
-        incrementClipInsertCount(record);
         if (onSuccess) onSuccess(response);
       });
     }
@@ -1251,16 +1253,10 @@
           const secondFavorite = isLibraryFavorite({ type: "clip", clip: second.clip });
           const favoriteDifference = Number(secondFavorite) - Number(firstFavorite);
           if (favoriteDifference) return favoriteDifference;
-          const firstData = getClipTrackingData(first.clip);
-          const secondData = getClipTrackingData(second.clip);
-          if (mode === "inserted" && firstData.insertCount !== secondData.insertCount) {
-            return secondData.insertCount - firstData.insertCount;
-          }
-          if (mode === "leastInserted" && firstData.insertCount !== secondData.insertCount) {
-            return firstData.insertCount - secondData.insertCount;
-          }
-          if (mode === "recent" && firstData.addedAt !== secondData.addedAt) {
-            return secondData.addedAt - firstData.addedAt;
+          if (mode === "recent") {
+            const firstAddedAt = getClipTrackingData(first.clip).addedAt;
+            const secondAddedAt = getClipTrackingData(second.clip).addedAt;
+            if (firstAddedAt !== secondAddedAt) return secondAddedAt - firstAddedAt;
           }
           if (mode === "manual") {
             const firstOrder = Number.isInteger(first.clip.sortOrder) ? first.clip.sortOrder : null;
@@ -1508,6 +1504,7 @@
 
     function syncExportSelectionList() {
       exportFootageChoiceList.innerHTML = "";
+      exportFolderBreadcrumb.innerHTML = "";
       const isFootageMode = exportSelectionMode === "footage";
       const allChoices = isFootageMode
         ? getUniqueFootageRecords()
@@ -1523,6 +1520,9 @@
       };
       exportFootageModeButton.setAttribute("aria-pressed", String(isFootageMode));
       exportFolderModeButton.setAttribute("aria-pressed", String(!isFootageMode));
+      exportFolderToolbar.hidden = isFootageMode;
+      exportFootageChoiceList.classList.toggle("save-clip-folder-list", !isFootageMode);
+      exportChoiceSearch.classList.toggle("save-clip-folder-search", !isFootageMode);
 
       if (!isFootageMode) {
         const foldersByParent = new Map();
@@ -1533,92 +1533,66 @@
         });
         foldersByParent.forEach((folders, parentId) => foldersByParent.set(parentId, sortFolderRecords(folders)));
         const relevantSubtree = new Map();
-        const searchMatchDescendantSubtree = new Map();
         const analyzeFolderMatches = (folder) => {
           const children = foldersByParent.get(folder.id) || [];
           const childStates = children.map(analyzeFolderMatches);
-          const selected = selectedValues.includes(folder.id);
           const searchMatched = Boolean(searchQuery) && matchesSearch(folder);
-          const relevantHere = !selected && (!searchQuery || searchMatched);
+          const relevantHere = !searchQuery || searchMatched;
           const hasMatch = relevantHere || childStates.some((state) => state.hasMatch);
-          const hasSearchMatch = searchMatched || childStates.some((state) => state.hasSearchMatch);
           relevantSubtree.set(folder.id, hasMatch);
-          const hasSearchMatchDescendant = childStates.some((state) => state.hasSearchMatch);
-          searchMatchDescendantSubtree.set(folder.id, hasSearchMatchDescendant);
-          return { hasMatch, hasSearchMatch };
+          return { hasMatch };
         };
         (foldersByParent.get("") || []).forEach(analyzeFolderMatches);
 
-        const selectedFolders = favoriteFolders
-          .filter((folder) => selectedValues.includes(folder.id))
-          .sort((first, second) =>
-            getFolderTrail(first.id).map((folder) => folder.name).join(" / ")
-              .localeCompare(getFolderTrail(second.id).map((folder) => folder.name).join(" / "))
-          );
-        if (selectedFolders.length) {
-          const heading = document.createElement("p");
-          heading.className = "export-choice-group-label";
-          heading.textContent = "Selected";
-          exportFootageChoiceList.appendChild(heading);
-
-          selectedFolders.forEach((folder) => {
-            const label = document.createElement("label");
-            label.className = "export-footage-option";
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.checked = true;
-            checkbox.addEventListener("change", () => {
-              const index = selectedValues.indexOf(folder.id);
-              if (index !== -1) selectedValues.splice(index, 1);
-              syncExportSelectionList();
-            });
-            const text = document.createElement("span");
-            text.textContent = getFolderTrail(folder.id).map((item) => item.name).join(" / ");
-            label.append(checkbox, text);
-            exportFootageChoiceList.appendChild(label);
-          });
-        }
-
         const roots = (foldersByParent.get("") || []).filter((folder) => relevantSubtree.get(folder.id));
-        if (!roots.length) {
-          if (!selectedFolders.length || searchQuery) {
-            const heading = document.createElement("p");
-            heading.className = "export-choice-group-label";
-            heading.textContent = "Matches";
-            exportFootageChoiceList.appendChild(heading);
-            const empty = document.createElement("p");
-            empty.className = "favorite-results-empty";
-            empty.textContent = searchQuery
-              ? `No folders match "${exportChoiceSearchQuery.trim()}".`
-              : "No folders have been created yet.";
-            exportFootageChoiceList.appendChild(empty);
+        const breadcrumbItems = [{ id: "", name: "Home" }].concat(getFolderTrail(exportPickerFocusFolderId));
+        breadcrumbItems.forEach((folder, index) => {
+          if (index) {
+            const separator = document.createElement("span");
+            separator.className = "library-breadcrumb-separator";
+            separator.textContent = "/";
+            exportFolderBreadcrumb.appendChild(separator);
           }
+          const button = document.createElement("button");
+          button.type = "button";
+          button.textContent = folder.name;
+          if (index === breadcrumbItems.length - 1) button.setAttribute("aria-current", "page");
+          button.addEventListener("click", () => {
+            exportPickerFocusFolderId = folder.id;
+            getFolderTrail(folder.id).forEach((ancestor) => expandedExportFolderIds.add(ancestor.id));
+            syncExportSelectionList();
+          });
+          exportFolderBreadcrumb.appendChild(button);
+        });
+        exportFolderSelectionCount.textContent = `${selectedValues.length} selected`;
+        if (!roots.length) {
+          const empty = document.createElement("p");
+          empty.className = "favorite-results-empty";
+          empty.textContent = searchQuery
+            ? `No folders match "${exportChoiceSearchQuery.trim()}".`
+            : "No folders have been created yet.";
+          exportFootageChoiceList.appendChild(empty);
           exportSelectedFootageButton.disabled = selectedValues.length === 0;
           return;
-        }
-
-        if (selectedFolders.length) {
-          const heading = document.createElement("p");
-          heading.className = "export-choice-group-label";
-          heading.textContent = "Matches";
-          exportFootageChoiceList.appendChild(heading);
         }
 
         const appendFolder = (folder, depth) => {
           const children = (foldersByParent.get(folder.id) || []).filter((child) => relevantSubtree.get(child.id));
           const isExpanded = expandedExportFolderIds.has(folder.id) ||
-            searchMatchDescendantSubtree.get(folder.id);
+            (Boolean(searchQuery) && children.length > 0);
           const node = document.createElement("div");
-          node.className = "export-folder-node";
+          node.className = "save-clip-folder-item save-clip-folder-node";
+          node.setAttribute("role", "listitem");
+          node.dataset.folderId = folder.id;
 
           const row = document.createElement("div");
-          row.className = "export-folder-row";
+          row.className = "save-clip-folder-row";
           row.style.setProperty("--folder-depth", String(depth));
 
           if (children.length) {
             const disclosure = document.createElement("button");
             disclosure.type = "button";
-            disclosure.className = "export-folder-disclosure";
+            disclosure.className = "save-clip-folder-disclosure";
             disclosure.setAttribute("aria-expanded", String(isExpanded));
             disclosure.setAttribute("aria-label", `${isExpanded ? "Collapse" : "Expand"} ${folder.name}`);
             disclosure.textContent = isExpanded ? "▾" : "▸";
@@ -1630,37 +1604,36 @@
             row.appendChild(disclosure);
           } else {
             const spacer = document.createElement("span");
-            spacer.className = "export-folder-disclosure-spacer";
+            spacer.className = "save-clip-folder-disclosure-spacer";
             row.appendChild(spacer);
           }
 
-          if (selectedValues.includes(folder.id)) {
-            const context = document.createElement("span");
-            context.className = "export-folder-context";
-            context.textContent = folder.name;
-            context.title = getFolderTrail(folder.id).map((item) => item.name).join(" / ");
-            row.appendChild(context);
-          } else {
-            const label = document.createElement("label");
-            label.className = "export-footage-option export-folder-option";
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.checked = false;
-            checkbox.addEventListener("change", () => {
-              if (!selectedValues.includes(folder.id)) selectedValues.push(folder.id);
-              syncExportSelectionList();
-            });
-            const text = document.createElement("span");
-            text.textContent = folder.name;
-            text.title = getFolderTrail(folder.id).map((item) => item.name).join(" / ");
-            label.append(checkbox, text);
-            row.appendChild(label);
-          }
+          const selectButton = document.createElement("button");
+          selectButton.type = "button";
+          selectButton.className = "save-clip-folder-select";
+          selectButton.setAttribute("aria-pressed", String(selectedValues.includes(folder.id)));
+          selectButton.title = getFolderTrail(folder.id).map((item) => item.name).join(" / ");
+          const name = document.createElement("span");
+          name.className = "save-clip-folder-name";
+          name.textContent = folder.name;
+          const details = document.createElement("span");
+          details.className = "save-clip-folder-details";
+          const itemCount = (foldersByParent.get(folder.id) || []).length + favoriteRecords.filter((record) => record.folderId === folder.id).length;
+          details.textContent = `${itemCount} item${itemCount === 1 ? "" : "s"}`;
+          selectButton.append(name, details);
+          selectButton.addEventListener("click", () => {
+            const index = selectedValues.indexOf(folder.id);
+            if (index === -1) selectedValues.push(folder.id);
+            else selectedValues.splice(index, 1);
+            exportPickerFocusFolderId = folder.id;
+            syncExportSelectionList();
+          });
+          row.appendChild(selectButton);
           node.appendChild(row);
 
           if (children.length && isExpanded) {
             const childList = document.createElement("div");
-            childList.className = "export-folder-children";
+            childList.className = "save-clip-folder-children";
             children.forEach((child) => childList.appendChild(appendFolder(child, depth + 1)));
             node.appendChild(childList);
           }
@@ -2495,7 +2468,7 @@
         return;
       }
 
-      const isBackgroundLoad = /^(listClipFavorites|listClipFavoriteFootageStatus|listClipFolders|getClipSettings|getSceneKeeperQuickSaveStatus|getRandomMarkerSkipSuggestions|getRandomMarkerNames|getSelectedRandomMarkerSlots|createSceneKeeperBackup)\(/.test(scriptCall);
+      const isBackgroundLoad = /^(listClipFavorites|listClipFavoriteFootageStatus|listClipFolders|listClipTrash|getClipSettings|getSceneKeeperQuickSaveStatus|getRandomMarkerSkipSuggestions|getRandomMarkerNames|getSelectedRandomMarkerSlots|createSceneKeeperBackup)\(/.test(scriptCall);
       if (!isBackgroundLoad) setResult("Working...", "");
       const libraryAction = /^(createClipFolder|moveClipFolder|renameClipFolder|renameClipFavoriteFootage|deleteClipFolder|assignClipFavoriteFolder|saveSelectedClipFavorite|quickSaveSelectedClipsToFolder|confirmClipFavoriteReplacement|renameClipFavorite|updateClipFavorite|reorderClipFavorites|reorderClipFolders|reorderClipLibraryItems|deleteClipFavorite|deleteClipFavoriteFootage|restoreClipTrashItem|relinkClipFavoriteFootage|importClipFavorites|resolveClipFavoriteImport)\(/.test(scriptCall);
       const timelineAction = /^(insertClipFavorite|insertClipFavoriteIntoSelectedPrecomp|insertRandomClipFavoriteForSelectedFootage|insertRandomClipsBetweenMarkers|replaceRandomMarkerClips|replaceSelectedClipFromFolders|quickReplaceSelectedClip|prepareSelectedClipReplaceSlots|deleteRandomMarkerPrecomps)\(/.test(scriptCall);
@@ -2690,6 +2663,17 @@
       closeLibraryContextMenu();
       libraryContextMenuAnchor = anchor;
       actions.forEach((action) => {
+        if (action.type === "info") {
+          const info = document.createElement("div");
+          info.className = "library-context-menu-info";
+          const label = document.createElement("strong");
+          label.textContent = action.label;
+          const value = document.createElement("span");
+          value.textContent = action.value;
+          info.append(label, value);
+          libraryContextMenu.appendChild(info);
+          return;
+        }
         const button = document.createElement("button");
         button.type = "button";
         button.setAttribute("role", "menuitem");
@@ -3446,6 +3430,7 @@
       librarySearch.value = "";
       syncSearchClearButtons();
       renderFavoriteClips();
+      favoriteList.scrollTop = 0;
     }
 
     function handleLibraryDrop(event, folderId) {
@@ -3753,10 +3738,12 @@
 
     function renderFavoriteClips() {
       const query = librarySearch.value.trim().toLocaleLowerCase();
+      const isHomeDashboard = !query && !selectedFolderId;
       syncSearchClearButtons();
       hideFavoritePreview();
       favoriteList.classList.add("favorite-clip-grid");
-      favoriteList.classList.toggle("footage-sorted", clipSortMode === "footage");
+      favoriteList.classList.toggle("home-dashboard", isHomeDashboard);
+      favoriteList.classList.toggle("footage-sorted", !isHomeDashboard && clipSortMode === "footage");
       let resultItemContainer = favoriteList;
       renderExplorerTabs();
       renderLibraryBreadcrumb();
@@ -3825,7 +3812,6 @@
                   setResult(String(response).substring(6), "error");
                   return;
                 }
-                incrementClipInsertCount(entry.clip);
                 setResult(response || `Added “${entry.name}” to the selected precomp.`, "success");
               });
             } },
@@ -4040,7 +4026,7 @@
         name.className = "favorite-result-name";
         name.textContent = entry.name;
         button.appendChild(name);
-        if (entry.type === "clip") {
+        if (entry.type === "clip" && query) {
           const folderLabel = document.createElement("span");
           folderLabel.className = "favorite-result-folder";
           folderLabel.textContent = entry.folderName || "Home";
@@ -4050,14 +4036,6 @@
         details.className = "favorite-result-details";
         details.textContent = entry.details;
         button.appendChild(details);
-        if (entry.type === "clip") {
-          const insertCount = getClipTrackingData(entry.clip).insertCount;
-          const insertCountLabel = document.createElement("span");
-          insertCountLabel.className = "favorite-result-insert-count";
-          insertCountLabel.textContent = `${insertCount} inserts`;
-          insertCountLabel.title = `Inserted ${insertCount} ${insertCount === 1 ? "time" : "times"}`;
-          button.appendChild(insertCountLabel);
-        }
         button.addEventListener("click", (event) => {
           hideDeleteConfirmation();
           const isMultiSelect = event.ctrlKey || event.metaKey || event.shiftKey;
@@ -4202,23 +4180,22 @@
         title.textContent = getClipFootageName(clip);
         heading.appendChild(title);
         const originalName = String(clip.footageMetadata && clip.footageMetadata.originalName || "").trim();
-        if (originalName && originalName !== getClipFootageName(clip)) {
-          const original = document.createElement("span");
-          original.className = "favorite-footage-original-name";
-          original.textContent = `Original: ${originalName}`;
-          heading.appendChild(original);
-        }
         heading.title = String(clip.sourcePath || clip.sourceName || "");
         const showFootageActions = (event) => {
           event.stopPropagation();
-          openLibraryContextMenu(event, [
+          const actions = [];
+          if (originalName && originalName !== getClipFootageName(clip)) {
+            actions.push({ type: "info", label: "Original name", value: originalName });
+          }
+          actions.push(
             { label: "Reveal Footage", run: () => callAE(`revealClipFavoriteFootage(${clip.storageIndex})`, "") },
             { label: "Rename Footage", run: () => openRenameDialog({
               type: "footage",
               sourcePath: clip.sourcePath,
               name: getClipFootageName(clip)
             }) }
-          ]);
+          );
+          openLibraryContextMenu(event, actions);
         };
         heading.addEventListener("click", showFootageActions);
         heading.addEventListener("contextmenu", showFootageActions);
@@ -4302,8 +4279,40 @@
       }
 
       if (!selectedFolderId) {
-        addCollectionEntries("");
-        if (!favoriteList.childElementCount) showEmptyResults("No collections or clips yet. Create a folder to get started.");
+        const favoriteFoldersAtTop = sortFolderRecords(favoriteFolders
+          .filter((folder) => libraryFavoriteKeys.has(`folder:${folder.id}`)))
+          .map((folder) => ({ type: "folder", folder }));
+        const favoriteClipsAtTop = sortClipRecords(favoriteRecords
+          .filter((clip) => isLibraryFavorite({ type: "clip", clip })))
+          .map((clip) => ({ type: "clip", clip }));
+        const rootFolders = sortFolderRecords(favoriteFolders
+          .filter((folder) => (!folder.parentId || !favoriteFolders.some((candidate) => candidate.id === folder.parentId)) &&
+            !libraryFavoriteKeys.has(`folder:${folder.id}`)))
+          .map((folder) => ({ type: "folder", folder }));
+        const favoriteClipIndices = new Set(favoriteClipsAtTop.map((entry) => entry.clip.storageIndex));
+        const rootClips = sortClipRecords(favoriteRecords
+          .filter((record) => !record.folderId && !favoriteClipIndices.has(record.storageIndex)))
+          .map((clip) => ({ type: "clip", clip }));
+        const seenHomeEntries = new Set();
+        const homeEntries = favoriteFoldersAtTop.concat(favoriteClipsAtTop, rootFolders, rootClips).filter((entry) => {
+          const key = entry.type === "folder" ? `folder:${entry.folder.id}` : `clip:${entry.clip.storageIndex}`;
+          if (seenHomeEntries.has(key)) return false;
+          seenHomeEntries.add(key);
+          return true;
+        });
+        if (!homeEntries.length) {
+          showEmptyResults("No folders or clips yet. Create a folder to get started.");
+        } else {
+          const grid = document.createElement("div");
+          grid.className = "home-dashboard-grid";
+          favoriteList.appendChild(grid);
+          resultItemContainer = grid;
+          homeEntries.forEach((entry) => {
+            if (entry.type === "folder") addFolderEntry(entry.folder);
+            else addClipEntry(entry.clip);
+          });
+          resultItemContainer = favoriteList;
+        }
       } else {
         addCollectionEntries(selectedFolderId);
         if (!favoriteList.childElementCount) {
@@ -4324,6 +4333,22 @@
       } else if (buttonBounds.bottom > listBounds.bottom) {
         favoriteList.scrollTop += buttonBounds.bottom - listBounds.bottom;
       }
+    }
+
+    function focusSavedClipInFolder(folderId, clipId) {
+      const folderClips = favoriteRecords.filter((record) => record.folderId === folderId);
+      const savedRecord = (clipId && favoriteRecords.find((record) => record.clipId === clipId)) || folderClips[folderClips.length - 1];
+      if (!favoriteFolders.some((folder) => folder.id === folderId) || !savedRecord) return;
+      selectedFolderId = folderId;
+      selectedFootagePath = "";
+      favoriteResultsMode = "footage";
+      selectedFavoriteStorageIndex = savedRecord.storageIndex;
+      selectedLibraryItemKey = `clip:${savedRecord.storageIndex}`;
+      selectedLibraryKeys.clear();
+      selectedLibraryKeys.add(selectedLibraryItemKey);
+      syncActiveExplorerTab();
+      renderFavoriteClips();
+      requestAnimationFrame(() => scrollSelectedFavoriteIntoView());
     }
 
     function scrollLibraryItemIntoView(resultKey) {
@@ -5279,9 +5304,16 @@
       const activeFolderName = destinationFolderId
         ? (favoriteFolders.find((folder) => folder.id === destinationFolderId)?.name || "Current Folder")
         : "Home";
-      saveClipCurrentLocationButton.textContent = `Save in "${activeFolderName}"`;
+      saveClipCurrentLocationButton.textContent = saveClipDestinationOnlyMode
+        ? `Save to "${activeFolderName}"`
+        : `Save in "${activeFolderName}"`;
+      saveClipCurrentLocationButton.disabled = saveClipDestinationOnlyMode && !destinationFolderId;
+      const pickerHelp = saveClipDialog.querySelector(".save-clip-current-location small");
+      pickerHelp.textContent = saveClipDestinationOnlyMode
+        ? "Choose a folder for this save only. Your usual Quick Save folder stays unchanged."
+        : "Select a folder below or expand it to browse subfolders.";
       const sceneFolder = favoriteFolders.find((folder) => folder.id === saveClipCurrentFolderId);
-      saveClipSceneLocationButton.hidden = !sceneFolder;
+      saveClipSceneLocationButton.hidden = saveClipDestinationOnlyMode || !sceneFolder;
       if (sceneFolder) saveClipSceneLocationButton.textContent = `Quick save in "${sceneFolder.name}"`;
       updateSaveClipNamePlaceholder(destinationFolderId);
     }
@@ -5380,11 +5412,14 @@
       callAE("cancelClipFavoriteReplacement()", "Replacement canceled.");
     }
 
-    function showSaveClipDialog() {
-      saveClipSelectedFolderId = "";
+    function showSaveClipDialog(destinationOnly = false) {
+      saveClipDestinationOnlyMode = destinationOnly;
+      const startingFolderId = favoriteFolders.some((folder) => folder.id === selectedFolderId) ? selectedFolderId : "";
+      saveClipSelectedFolderId = startingFolderId;
       saveClipFolderSearch.value = "";
       expandedSaveClipFolderIds.clear();
       collapsedSaveClipSearchFolderIds.clear();
+      getFolderTrail(startingFolderId).forEach((folder) => expandedSaveClipFolderIds.add(folder.id));
       saveClipOptionsDetails.open = false;
       saveClipNameInput.value = "";
       saveClipPosition.checked = saveDefaultPosition.checked;
@@ -5393,8 +5428,12 @@
       saveClipCurrentFolderId = favoriteFolders.some((folder) => folder.id === selectedFolderId)
         ? selectedFolderId
         : "";
-      persistQuickSaveShortcutSettings(saveClipCurrentFolderId);
-      saveClipPickerFolderId = "";
+      if (!destinationOnly) persistQuickSaveShortcutSettings(saveClipCurrentFolderId);
+      saveClipPickerFolderId = startingFolderId;
+      saveClipDialog.querySelector("#save-clip-dialog-title").textContent = destinationOnly
+        ? "Save selected clips to…"
+        : "Where should this clip be saved?";
+      saveClipOptionsDetails.hidden = destinationOnly;
       renderSaveClipFolderPicker();
       saveClipDialog.hidden = false;
       if (guidedTourActive && guidedTourStep === "saveAction") {
@@ -5420,8 +5459,9 @@
       quickSaveSelectedClipsButton.disabled = true;
       const batch = pendingQuickSaveBatch;
       const encodedFolderId = JSON.stringify(encodeURIComponent(batch.folderId));
+      const saveFunction = batch.oneTimeFolder ? "saveSelectedClipsToFolderOnce" : "quickSaveSelectedClipsToFolder";
       callAE(
-        `quickSaveSelectedClipsToFolder(${encodedFolderId}, ${batch.savePosition}, ${batch.saveScale}, ${batch.saveAudio}, ${startAtIndex}, ${confirmLongClip}, ${saveFirstTenSeconds})`,
+        `${saveFunction}(${encodedFolderId}, ${batch.savePosition}, ${batch.saveScale}, ${batch.saveAudio}, ${startAtIndex}, ${confirmLongClip}, ${saveFirstTenSeconds})`,
         "",
         (response) => {
           quickSaveSelectedClipsButton.disabled = false;
@@ -5458,6 +5498,9 @@
           if (warnings) batch.longClipWarnings.push(warnings);
           pendingQuickSaveBatch = null;
           refreshFavorites(!clipId, "", undefined, () => {
+            if (batch.oneTimeFolder) {
+              focusSavedClipInFolder(batch.folderId, clipId);
+            }
             const success = `Saved ${batch.savedCount} clip${batch.savedCount === 1 ? "" : "s"}${folderName ? ` to ${folderName}` : ""}.`;
             const notices = batch.failures.slice();
             if (batch.skippedLongClipCount) notices.push(`${batch.skippedLongClipCount} long clip${batch.skippedLongClipCount === 1 ? " was" : "s were"} not saved. Shorten ${batch.skippedLongClipCount === 1 ? "it" : "them"} in After Effects and save again.`);
@@ -5488,6 +5531,28 @@
 
     let extraClipActionsHideTimer = null;
     let extraClipActionsFrame = null;
+    function closeExtraClipActions() {
+      extraClipActionsToggle.setAttribute("aria-expanded", "false");
+      if (extraClipActionsFrame !== null) {
+        window.cancelAnimationFrame(extraClipActionsFrame);
+        extraClipActionsFrame = null;
+      }
+      if (extraClipActionsHideTimer) window.clearTimeout(extraClipActionsHideTimer);
+      extraClipActions.classList.remove("is-open");
+      extraClipActionsHideTimer = window.setTimeout(() => {
+        if (extraClipActionsToggle.getAttribute("aria-expanded") === "false") {
+          extraClipActions.hidden = true;
+        }
+        extraClipActionsHideTimer = null;
+      }, 190);
+    }
+
+    document.addEventListener("pointerdown", (event) => {
+      if (extraClipActionsToggle.getAttribute("aria-expanded") !== "true") return;
+      if (event.target.closest("#extra-clip-actions button, #extra-clip-actions-toggle")) return;
+      closeExtraClipActions();
+    });
+
     extraClipActionsToggle.addEventListener("click", () => {
       const expanded = extraClipActionsToggle.getAttribute("aria-expanded") !== "true";
       extraClipActionsToggle.setAttribute("aria-expanded", String(expanded));
@@ -5511,22 +5576,17 @@
         return;
       }
 
-      extraClipActions.classList.remove("is-open");
-      extraClipActionsHideTimer = window.setTimeout(() => {
-        if (extraClipActionsToggle.getAttribute("aria-expanded") === "false") {
-          extraClipActions.hidden = true;
-        }
-        extraClipActionsHideTimer = null;
-      }, 190);
+      closeExtraClipActions();
     });
 
     quickSaveSelectedClipsButton.addEventListener("click", () => {
-      if (!favoriteFolders.some((folder) => folder.id === selectedFolderId)) {
+      const saveTargetFolderId = selectedFolderId;
+      if (!favoriteFolders.some((folder) => folder.id === saveTargetFolderId)) {
         setResult("Open a collection folder before saving.", "error");
         return;
       }
       pendingQuickSaveBatch = {
-        folderId: selectedFolderId,
+        folderId: saveTargetFolderId,
         savePosition: saveDefaultPosition.checked,
         saveScale: saveDefaultScale.checked,
         saveAudio: saveDefaultAudio.checked,
@@ -5534,7 +5594,8 @@
         skippedLongClipCount: 0,
         failures: [],
         longClipWarnings: [],
-        lastClipId: ""
+        lastClipId: "",
+        oneTimeFolder: false
       };
       if (guidedTourActive && guidedTourStep === "saveAction") {
         guidedTourBusy = true;
@@ -5543,7 +5604,31 @@
       runQuickSaveBatch();
     });
 
+    saveToFolderOpenButton.addEventListener("click", () => showSaveClipDialog(true));
+
     saveClipCurrentLocationButton.addEventListener("click", () => {
+      if (saveClipDestinationOnlyMode) {
+        const folderId = saveClipSelectedFolderId || saveClipPickerFolderId;
+        const folder = favoriteFolders.find((item) => item.id === folderId);
+        if (!folder) return;
+        saveClipDialog.hidden = true;
+        saveClipDestinationOnlyMode = false;
+        saveClipOptionsDetails.hidden = false;
+        pendingQuickSaveBatch = {
+          folderId,
+          savePosition: saveDefaultPosition.checked,
+          saveScale: saveDefaultScale.checked,
+          saveAudio: saveDefaultAudio.checked,
+          savedCount: 0,
+          skippedLongClipCount: 0,
+          failures: [],
+          longClipWarnings: [],
+          lastClipId: "",
+          oneTimeFolder: true
+        };
+        runQuickSaveBatch();
+        return;
+      }
       saveClipToFolder(saveClipSelectedFolderId || saveClipPickerFolderId);
     });
     saveClipSceneLocationButton.addEventListener("click", () => {
@@ -5565,6 +5650,8 @@
     });
     cancelSaveClipButton.addEventListener("click", () => {
       saveClipDialog.hidden = true;
+      saveClipDestinationOnlyMode = false;
+      saveClipOptionsDetails.hidden = false;
       clearSelectedClipCapture();
     });
     saveLongClipButton.addEventListener("click", () => {
@@ -5629,6 +5716,8 @@
     saveClipDialog.addEventListener("click", (event) => {
       if (event.target === saveClipDialog) {
         saveClipDialog.hidden = true;
+        saveClipDestinationOnlyMode = false;
+        saveClipOptionsDetails.hidden = false;
         clearSelectedClipCapture();
       }
     });
@@ -5640,14 +5729,13 @@
       selectedLibraryItemKey = "";
       folderCreateRow.hidden = true;
       renderFavoriteClips();
+      favoriteList.scrollTop = 0;
     });
 
     function syncClipSortMenu() {
       const modeLabels = {
         footage: "Footage and In point",
         manual: "Manual order",
-        inserted: "Most inserted",
-        leastInserted: "Least inserted",
         recent: "Recently added"
       };
       clipSortMenu.querySelectorAll("[data-sort-mode]").forEach((button) => {
@@ -5697,7 +5785,7 @@
     });
     clipSortMenu.querySelectorAll("[data-sort-mode]").forEach((button) => {
       button.addEventListener("click", () => {
-        clipSortMode = ["manual", "inserted", "leastInserted", "recent", "footage"].includes(button.dataset.sortMode)
+        clipSortMode = ["manual", "recent", "footage"].includes(button.dataset.sortMode)
           ? button.dataset.sortMode
         : "footage";
         try {
@@ -6224,15 +6312,6 @@
         } catch (error) {
           failures = fields[3] || "Could not read the replacement result.";
         }
-        replacedIds.forEach((clipId) => {
-          const record = favoriteRecords.find((entry) => entry.clipId === clipId);
-          if (!record) return;
-          const key = getClipTrackingKey(record);
-          const data = clipTrackingData[key] || { addedAt: Date.now(), randomRank: Math.random() };
-          data.insertCount = Math.max(0, Number(data.insertCount) || 0) + 1;
-          clipTrackingData[key] = data;
-        });
-        saveClipTrackingData();
         renderFavoriteClips();
         const success = `Quick-replaced ${replacedIds.length} clip${replacedIds.length === 1 ? "" : "s"}.`;
         setResult(failures ? `${success} ${failures}` : success, failures ? "warning" : "success");
@@ -6458,14 +6537,7 @@
           if (!slot) return;
           slot.name = replacedSlot.name;
           slot.clipId = replacedSlot.clipId;
-          const record = favoriteRecords.find((clip) => clip.clipId === replacedSlot.clipId);
-          if (!record) return;
-          const trackingKey = getClipTrackingKey(record);
-          const data = clipTrackingData[trackingKey] || { addedAt: Date.now(), randomRank: Math.random() };
-          data.insertCount = Math.max(0, Number(data.insertCount) || 0) + 1;
-          clipTrackingData[trackingKey] = data;
         });
-        saveClipTrackingData();
         renderFavoriteClips();
         renderRandomMarkerReplaceList();
         randomMarkerReplaceList.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
@@ -6531,15 +6603,7 @@
             slot.name = item.name;
             slot.clipId = item.clipId;
           }
-          const record = favoriteRecords.find((clip) => clip.clipId === item.clipId);
-          if (record) {
-            const key = getClipTrackingKey(record);
-            const data = clipTrackingData[key] || { addedAt: Date.now(), randomRank: Math.random() };
-            data.insertCount = Math.max(0, Number(data.insertCount) || 0) + 1;
-            clipTrackingData[key] = data;
-          }
         });
-        saveClipTrackingData();
         renderFavoriteClips();
         const previouslySelectedKeys = new Set(Array.from(randomMarkerReplaceList.querySelectorAll("input:checked"), (checkbox) => checkbox.dataset.slotKey));
         renderRandomMarkerReplaceList();
@@ -6760,19 +6824,7 @@
             try { outcomes = JSON.parse(decodeURIComponent(fields[1] || "%5B%5D")); } catch (error) {}
             const replaced = outcomes.filter((outcome) => String(outcome).indexOf("SELECTED_CLIP_REPLACED|") === 0);
             const failed = outcomes.length - replaced.length;
-            replaced.forEach((outcome) => {
-              const item = String(outcome).split("|");
-              let clipId = "";
-              try { clipId = decodeURIComponent(item[4] || ""); } catch (error) {}
-              const record = favoriteRecords.find((entry) => entry.clipId === clipId);
-              if (!record) return;
-              const trackingKey = getClipTrackingKey(record);
-              const data = clipTrackingData[trackingKey] || { addedAt: Date.now(), randomRank: Math.random() };
-              data.insertCount = Math.max(0, Number(data.insertCount) || 0) + 1;
-              clipTrackingData[trackingKey] = data;
-            });
             if (replaced.length) {
-              saveClipTrackingData();
               renderFavoriteClips();
               randomMarkerInsertDialog.hidden = true;
               setResult(`Replaced clips in ${replaced.length} selected precomp${replaced.length === 1 ? "" : "s"}${failed ? `; ${failed} could not be replaced` : ""}.`, failed ? "warning" : "success");
@@ -6798,15 +6850,6 @@
               slot.name = displayName;
               if (replacementClipId) slot.clipId = replacementClipId;
             }
-          }
-          const matchingRecord = favoriteRecords.find((record) => record.clipId === replacementClipId);
-          if (matchingRecord) {
-            const key = getClipTrackingKey(matchingRecord);
-            const data = clipTrackingData[key] || { addedAt: Date.now(), randomRank: Math.random() };
-            data.insertCount = Math.max(0, Number(data.insertCount) || 0) + 1;
-            clipTrackingData[key] = data;
-            saveClipTrackingData();
-            renderFavoriteClips();
           }
           randomMarkerInsertDialog.hidden = true;
           replaceSelectedNextDialog.hidden = false;
@@ -6844,21 +6887,11 @@
         randomMarkerInsertRunButton.disabled = false;
         const fields = response.split("|");
         if (fields[0] === "MARKER_RANDOM_DONE") {
-          const insertedClipIds = fields[2] ? fields[2].split(",").map((id) => decodeURIComponent(id)) : [];
-          insertedClipIds.forEach((clipId) => {
-            const record = favoriteRecords.find((clip) => clip.clipId === clipId);
-            if (!record) return;
-            const key = getClipTrackingKey(record);
-            const data = clipTrackingData[key] || { addedAt: Date.now(), randomRank: Math.random() };
-            data.insertCount = Math.max(0, Number(data.insertCount) || 0) + 1;
-            clipTrackingData[key] = data;
-          });
           try {
             randomMarkerReplaceSlots = JSON.parse(decodeURIComponent(fields[14] || "%5B%5D"));
           } catch (error) {
             randomMarkerReplaceSlots = [];
           }
-          saveClipTrackingData();
           renderFavoriteClips();
           randomMarkerInsertDialog.hidden = true;
           const inserted = Number(fields[1]) || 0;
@@ -6956,6 +6989,9 @@
       exportSelectedFootagePaths = selectedFootagePath ? [selectedFootagePath] : [];
       exportSelectedFolderIds = [];
       exportSelectionMode = "folders";
+      exportPickerFocusFolderId = favoriteFolders.some((folder) => folder.id === selectedFolderId) ? selectedFolderId : "";
+      expandedExportFolderIds.clear();
+      getFolderTrail(exportPickerFocusFolderId).forEach((folder) => expandedExportFolderIds.add(folder.id));
       syncExportSelectionList();
       exportChoiceSearch.placeholder = exportSelectionMode === "footage" ? "Search footage..." : "Search folders...";
       exportChoiceSearch.setAttribute("aria-label", exportSelectionMode === "footage" ? "Search footage" : "Search folders");
@@ -6994,6 +7030,11 @@
       event.stopPropagation();
       libraryDataPage.hidden = false;
       exportLibraryOpenButton.focus();
+    });
+
+    libraryDataPageCloseButton.addEventListener("click", () => {
+      libraryDataPage.hidden = true;
+      libraryDataToggle.focus();
     });
 
     exportLibraryOpenButton.addEventListener("click", openExportDataDialog);
