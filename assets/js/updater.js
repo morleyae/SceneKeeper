@@ -11,6 +11,7 @@
   const LAST_CHECK_KEY = "scenekeeper.update.lastCheck";
   const PENDING_UPDATE_KEY = "scenekeeper.update.pendingVersion";
   const INSTALLED_VERSION_KEY = "scenekeeper.installedVersion";
+  const ARCHIVE_RETRY_KEY = "scenekeeper.update.archiveRetryVersion";
   const CHANGELOG_FEATURE_VERSION = "1.0.26";
   const NO_HISTORY_VERSION_FLOOR = "1.0.16";
   const RELEASE_NOTES = {
@@ -50,7 +51,8 @@
       "Import and Export now start from a full panel page with clear choices.",
       "Update completion and errors appear in the SceneKeeper panel instead of system popups; after installation, reopen the panel to load the update."
     ],
-    "1.0.45": ["After an update installs, use the Finish button to reload SceneKeeper and start using the new version without restarting After Effects."]
+    "1.0.45": ["After an update installs, use the Finish button to reload SceneKeeper and start using the new version without restarting After Effects."],
+    "1.0.47": ["Windows updates now read saved paths as UTF-8, including account names with umlauts. If the downloaded ZIP disappears, SceneKeeper automatically downloads it once more."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -214,7 +216,11 @@
       try { fs.deleteFile(resultPath); } catch (error) {}
     }
     const state = `${archivePath}\n${extensionPath}\n${version}\n`;
-    if (!writeFile(helperPath, helperResult.data) || !writeFile(statePath, state)) {
+    const utf8Encoding = window.cep && window.cep.encoding && window.cep.encoding.UTF8;
+    const stateWritten = utf8Encoding === undefined
+      ? writeFile(statePath, state)
+      : writeFile(statePath, state, utf8Encoding);
+    if (!writeFile(helperPath, helperResult.data) || !stateWritten) {
       return callback(new Error("Could not prepare the automatic installer"));
     }
 
@@ -298,17 +304,30 @@
         else if (notice) notice.textContent = `SceneKeeper ${version} is installed. Finish the installation with the button below.`;
         if (retryUpdateButton) retryUpdateButton.hidden = true;
         if (reopenPanelButton) reopenPanelButton.hidden = false;
+        try { window.localStorage.removeItem(ARCHIVE_RETRY_KEY); } catch (error) {}
         scheduledVersion = "";
         revealNotice();
         return;
       }
       if (lines[0] === "ERROR") {
         const details = lines.slice(1).join(" ").trim();
+        const archiveMissing = /update ZIP was not found|archive is missing/i.test(details);
+        let previousArchiveRetry = "";
+        try { previousArchiveRetry = window.localStorage.getItem(ARCHIVE_RETRY_KEY) || ""; } catch (error) {}
+        if (archiveMissing && previousArchiveRetry !== version) {
+          try { window.localStorage.setItem(ARCHIVE_RETRY_KEY, version); } catch (error) {}
+          clearPendingUpdateVersion();
+          clearLastCheckTime();
+          scheduledVersion = "";
+          setNoticeMessage(`The ${version} update file could not be read. SceneKeeper is downloading it again…`);
+          checkForUpdates(true);
+          return;
+        }
         setNoticeMessage(`SceneKeeper ${version} could not be installed${details ? `: ${details}` : ". Please try again."}`);
         if (retryUpdateButton) {
           retryUpdateButton.hidden = false;
           retryUpdateButton.disabled = false;
-          retryUpdateButton.textContent = "Retry Update Install";
+          retryUpdateButton.textContent = archiveMissing ? "Download Update Again" : "Retry Update Install";
         }
         scheduledVersion = "";
         return;
@@ -361,6 +380,20 @@
     const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
     const archivePath = `${userData}/SceneKeeper/updates/SceneKeeper-${version}.zip`;
     const fs = window.cep && window.cep.fs;
+    let archiveRetryVersion = "";
+    try { archiveRetryVersion = window.localStorage.getItem(ARCHIVE_RETRY_KEY) || ""; } catch (error) {}
+    if (archiveRetryVersion === version) {
+      if (fs && typeof fs.deleteFile === "function") {
+        try { fs.deleteFile(archivePath); } catch (error) {}
+      }
+      clearPendingUpdateVersion();
+      scheduledVersion = "";
+      clearLastCheckTime();
+      if (retryUpdateButton) retryUpdateButton.disabled = true;
+      setNoticeMessage(`Downloading SceneKeeper ${version} again…`);
+      checkForUpdates(true);
+      return;
+    }
     const archiveStat = fs && fs.stat ? fs.stat(archivePath) : null;
     if (!archiveStat || archiveStat.err !== 0) {
       clearPendingUpdateVersion();

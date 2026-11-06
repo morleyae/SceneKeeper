@@ -4282,19 +4282,15 @@
         const favoriteFoldersAtTop = sortFolderRecords(favoriteFolders
           .filter((folder) => libraryFavoriteKeys.has(`folder:${folder.id}`)))
           .map((folder) => ({ type: "folder", folder }));
-        const favoriteClipsAtTop = sortClipRecords(favoriteRecords
-          .filter((clip) => isLibraryFavorite({ type: "clip", clip })))
-          .map((clip) => ({ type: "clip", clip }));
         const rootFolders = sortFolderRecords(favoriteFolders
           .filter((folder) => (!folder.parentId || !favoriteFolders.some((candidate) => candidate.id === folder.parentId)) &&
             !libraryFavoriteKeys.has(`folder:${folder.id}`)))
           .map((folder) => ({ type: "folder", folder }));
-        const favoriteClipIndices = new Set(favoriteClipsAtTop.map((entry) => entry.clip.storageIndex));
         const rootClips = sortClipRecords(favoriteRecords
-          .filter((record) => !record.folderId && !favoriteClipIndices.has(record.storageIndex)))
+          .filter((record) => !record.folderId && !isLibraryFavorite({ type: "clip", clip: record })))
           .map((clip) => ({ type: "clip", clip }));
         const seenHomeEntries = new Set();
-        const homeEntries = favoriteFoldersAtTop.concat(favoriteClipsAtTop, rootFolders, rootClips).filter((entry) => {
+        const homeEntries = favoriteFoldersAtTop.concat(rootFolders, rootClips).filter((entry) => {
           const key = entry.type === "folder" ? `folder:${entry.folder.id}` : `clip:${entry.clip.storageIndex}`;
           if (seenHomeEntries.has(key)) return false;
           seenHomeEntries.add(key);

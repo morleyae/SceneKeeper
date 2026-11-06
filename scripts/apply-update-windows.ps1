@@ -5,13 +5,27 @@ param(
 $ErrorActionPreference = "Stop"
 $logPath = "$StateFile.log"
 try { Start-Transcript -LiteralPath $logPath -Append | Out-Null } catch {}
-$stateLines = Get-Content -LiteralPath $StateFile
-$archive = $stateLines[0]
-$target = $stateLines[1]
-$version = $stateLines[2]
 $resultPath = "$StateFile.result"
+try {
+  # CEP writes the state file as UTF-8. Windows PowerShell 5 otherwise reads
+  # it using the machine's legacy code page, which corrupts paths containing
+  # accented characters in a Windows user name or parent folder.
+  $stateText = [System.IO.File]::ReadAllText($StateFile, [System.Text.Encoding]::UTF8)
+  $stateText = $stateText.TrimStart([char]0xFEFF)
+  $stateLines = $stateText -split "`r?`n"
+  $archive = $stateLines[0].TrimEnd("`r")
+  $target = $stateLines[1].TrimEnd("`r")
+  $version = $stateLines[2].TrimEnd("`r")
+} catch {
+  $message = "Could not read the update state file as UTF-8: $($_.Exception.Message)"
+  try { Set-Content -LiteralPath $resultPath -Value @("ERROR", $message) -Encoding UTF8 } catch {}
+  try { Add-Content -LiteralPath $logPath -Value $message } catch {}
+  exit 2
+}
 if (-not (Test-Path -LiteralPath $archive)) {
-  try { Set-Content -LiteralPath $resultPath -Value @("ERROR", "The update archive is missing.") -Encoding UTF8 } catch {}
+  $message = "The downloaded update ZIP was not found at its saved path. It may have been removed or blocked by security software; retry to download it again."
+  try { Add-Content -LiteralPath $logPath -Value "Expected update archive path: $archive" } catch {}
+  try { Set-Content -LiteralPath $resultPath -Value @("ERROR", $message) -Encoding UTF8 } catch {}
   exit 2
 }
 
