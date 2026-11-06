@@ -55,7 +55,8 @@
     "1.0.47": ["Windows updates now read saved paths as UTF-8, including account names with umlauts. If the downloaded ZIP disappears, SceneKeeper automatically downloads it once more."],
     "1.0.48": ["Small test release to verify that automatic updates are detected and installed."],
     "1.0.49": ["Windows update installation now reports each step, so a blocked or stalled installer is easier to diagnose."],
-    "1.0.50": ["Windows update failures now include the installer's last log lines and report when PowerShell cannot write its result."]
+    "1.0.50": ["Windows update failures now include the installer's last log lines and report when PowerShell cannot write its result."],
+    "1.0.51": ["Small test release to verify automatic update detection and installation."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
