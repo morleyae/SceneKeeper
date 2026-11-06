@@ -56,7 +56,8 @@
     "1.0.48": ["Small test release to verify that automatic updates are detected and installed."],
     "1.0.49": ["Windows update installation now reports each step, so a blocked or stalled installer is easier to diagnose."],
     "1.0.50": ["Windows update failures now include the installer's last log lines and report when PowerShell cannot write its result."],
-    "1.0.51": ["Small test release to verify automatic update detection and installation."]
+    "1.0.51": ["Small test release to verify automatic update detection and installation."],
+    "1.0.52": ["The Windows updater extracts beside the extension for a same-drive folder swap and reports each replacement step separately."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");

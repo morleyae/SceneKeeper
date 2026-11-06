@@ -4,11 +4,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 $logPath = "$StateFile.log"
-try { Start-Transcript -LiteralPath $logPath -Append | Out-Null } catch {}
 $resultPath = "$StateFile.result"
+function Write-UpdateLog([string]$Message) {
+  try { [System.IO.File]::AppendAllText($logPath, "$Message`r`n", [System.Text.Encoding]::UTF8) } catch {}
+}
 function Write-UpdateProgress([string]$Message) {
-  try { Set-Content -LiteralPath $resultPath -Value @("PROGRESS", $Message) -Encoding UTF8 } catch {}
-  try { Add-Content -LiteralPath $logPath -Value "SceneKeeper update: $Message" } catch {}
+  $script:currentStage = $Message
+  try { [System.IO.File]::WriteAllText($resultPath, "PROGRESS`r`n$Message", [System.Text.Encoding]::UTF8) }
+  catch { Write-UpdateLog "Could not write progress ($Message): $($_.Exception.Message)" }
+  Write-UpdateLog "Stage: $Message"
 }
 function Write-UpdateResult([string]$Status, [string]$Message) {
   try {
@@ -18,11 +22,12 @@ function Write-UpdateResult([string]$Status, [string]$Message) {
       [System.Text.Encoding]::UTF8
     )
   } catch {
-    try { Add-Content -LiteralPath $logPath -Value "Could not write installer result ($Status): $($_.Exception.Message)" } catch {}
+    Write-UpdateLog "Could not write installer result ($Status): $($_.Exception.Message)"
     return $false
   }
   return $true
 }
+$script:currentStage = "Starting the Windows installer."
 Write-UpdateProgress "Installer started; reading update state."
 try {
   # CEP writes the state file as UTF-8. Windows PowerShell 5 otherwise reads
@@ -37,12 +42,12 @@ try {
 } catch {
   $message = "Could not read the update state file as UTF-8: $($_.Exception.Message)"
   Write-UpdateResult "ERROR" $message | Out-Null
-  try { Add-Content -LiteralPath $logPath -Value $message } catch {}
+  Write-UpdateLog $message
   exit 2
 }
 if (-not (Test-Path -LiteralPath $archive)) {
   $message = "The downloaded update ZIP was not found at its saved path. It may have been removed or blocked by security software; retry to download it again."
-  try { Add-Content -LiteralPath $logPath -Value "Expected update archive path: $archive" } catch {}
+  Write-UpdateLog "Expected update archive path: $archive"
   Write-UpdateResult "ERROR" $message | Out-Null
   exit 2
 }
@@ -52,9 +57,10 @@ if (-not (Test-Path -LiteralPath $archive)) {
 # to load the new files. After Effects does not need to restart.
 try {
   Write-UpdateProgress "Preparing a temporary extraction folder."
-  $work = Join-Path $env:TEMP ([Guid]::NewGuid().ToString("N"))
+  $extensionParent = Split-Path -Parent $target
+  $work = Join-Path $extensionParent (".SceneKeeper-update-" + [Guid]::NewGuid().ToString("N"))
   $payload = Join-Path $work "SceneKeeper"
-  $backup = "$target.update-backup"
+  $backup = "$target.update-backup-" + [Guid]::NewGuid().ToString("N")
   New-Item -ItemType Directory -Path $work | Out-Null
   try {
     Write-UpdateProgress "Extracting the update ZIP."
@@ -63,30 +69,39 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $payload "CSXS\manifest.xml"))) {
       throw "The update archive does not contain a SceneKeeper CEP extension."
     }
-    Write-UpdateProgress "Replacing the installed SceneKeeper files."
-    if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
-    if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $backup }
+    Write-UpdateProgress "Moving the installed SceneKeeper folder aside."
+    if (Test-Path -LiteralPath $target) { Move-Item -LiteralPath $target -Destination $backup -ErrorAction Stop }
+    Write-UpdateProgress "Placing the new SceneKeeper folder."
     try {
-      Move-Item -LiteralPath $payload -Destination $target
+      Move-Item -LiteralPath $payload -Destination $target -ErrorAction Stop
     } catch {
-      if (Test-Path -LiteralPath $backup) { Move-Item -LiteralPath $backup -Destination $target }
+      if (Test-Path -LiteralPath $backup) { Move-Item -LiteralPath $backup -Destination $target -ErrorAction Stop }
       throw
     }
-    Write-UpdateProgress "Cleaning up temporary update files."
-    if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }
-    Remove-Item -LiteralPath $archive -Force
-    Remove-Item -LiteralPath $StateFile -Force
+    Write-UpdateProgress "Cleaning up the previous installation and download."
+    if (Test-Path -LiteralPath $backup) {
+      try { Remove-Item -LiteralPath $backup -Recurse -Force -ErrorAction Stop }
+      catch { Write-UpdateLog "Could not remove old installation backup: $($_.Exception.Message)" }
+    }
+    try { Remove-Item -LiteralPath $archive -Force -ErrorAction Stop }
+    catch { Write-UpdateLog "Could not remove downloaded ZIP: $($_.Exception.Message)" }
+    try { Remove-Item -LiteralPath $StateFile -Force -ErrorAction Stop }
+    catch { Write-UpdateLog "Could not remove installer state file: $($_.Exception.Message)" }
   } catch {
-    $failureMessage = $_.Exception.Message
-    Add-Content -LiteralPath $logPath -Value "SceneKeeper update failed: $failureMessage"
+    $failureMessage = "Step '$script:currentStage' failed: $($_.Exception.Message)"
     Write-UpdateResult "ERROR" $failureMessage | Out-Null
+    Write-UpdateLog "SceneKeeper update failed: $failureMessage"
     throw
   } finally {
-    if ($work -and (Test-Path -LiteralPath $work)) { Remove-Item -LiteralPath $work -Recurse -Force }
+    if ($work -and (Test-Path -LiteralPath $work)) {
+      try { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop }
+      catch { Write-UpdateLog "Could not remove temporary extraction folder: $($_.Exception.Message)" }
+    }
   }
 } catch {
-  try { Stop-Transcript | Out-Null } catch {}
+  $failureMessage = "Step '$script:currentStage' failed: $($_.Exception.Message)"
+  Write-UpdateResult "ERROR" $failureMessage | Out-Null
+  Write-UpdateLog "SceneKeeper update failed: $failureMessage"
   exit 10
 }
-try { Stop-Transcript | Out-Null } catch {}
 if (-not (Write-UpdateResult "INSTALLED" $version)) { exit 11 }
