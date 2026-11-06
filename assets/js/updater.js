@@ -54,7 +54,8 @@
     "1.0.45": ["After an update installs, use the Finish button to reload SceneKeeper and start using the new version without restarting After Effects."],
     "1.0.47": ["Windows updates now read saved paths as UTF-8, including account names with umlauts. If the downloaded ZIP disappears, SceneKeeper automatically downloads it once more."],
     "1.0.48": ["Small test release to verify that automatic updates are detected and installed."],
-    "1.0.49": ["Windows update installation now reports each step, so a blocked or stalled installer is easier to diagnose."]
+    "1.0.49": ["Windows update installation now reports each step, so a blocked or stalled installer is easier to diagnose."],
+    "1.0.50": ["Windows update failures now include the installer's last log lines and report when PowerShell cannot write its result."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -345,7 +346,11 @@
     }
 
     if (Date.now() - startedAt >= 5 * 60 * 1000) {
-      setNoticeMessage(`SceneKeeper ${version} installation did not finish within 5 minutes${lastProgress ? ` (last step: ${lastProgress})` : "; the Windows installer did not report that it started"}. Check the installer log, then retry.`);
+      const logTail = readInstallerLogTail();
+      const diagnostic = logTail
+        ? ` Installer log: ${logTail}`
+        : " No installer log was created; Windows may have blocked PowerShell before it started.";
+      setNoticeMessage(`SceneKeeper ${version} installation did not finish within 5 minutes${lastProgress ? ` (last step: ${lastProgress})` : "; the Windows installer did not report that it started"}.${diagnostic}`);
       if (retryUpdateButton) {
         retryUpdateButton.hidden = false;
         retryUpdateButton.disabled = false;
@@ -359,6 +364,23 @@
 
   function startInstallResultMonitor(version) {
     monitorInstallResult(version, Date.now());
+  }
+
+  function readInstallerLogTail() {
+    const cep = window.__adobe_cep__;
+    const fs = window.cep && window.cep.fs;
+    const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
+    const logPath = `${userData}/SceneKeeper/updates/pending-update.json.log`;
+    const result = fs && typeof fs.readFile === "function" ? fs.readFile(logPath) : null;
+    if (!result || result.err !== 0 || !result.data) return "";
+    return String(result.data)
+      .replace(/^\uFEFF/, "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(-8)
+      .join(" | ")
+      .slice(-700);
   }
 
   function showUpdateProblem(message) {

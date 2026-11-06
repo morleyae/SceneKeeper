@@ -10,6 +10,19 @@ function Write-UpdateProgress([string]$Message) {
   try { Set-Content -LiteralPath $resultPath -Value @("PROGRESS", $Message) -Encoding UTF8 } catch {}
   try { Add-Content -LiteralPath $logPath -Value "SceneKeeper update: $Message" } catch {}
 }
+function Write-UpdateResult([string]$Status, [string]$Message) {
+  try {
+    [System.IO.File]::WriteAllText(
+      $resultPath,
+      "$Status`r`n$Message",
+      [System.Text.Encoding]::UTF8
+    )
+  } catch {
+    try { Add-Content -LiteralPath $logPath -Value "Could not write installer result ($Status): $($_.Exception.Message)" } catch {}
+    return $false
+  }
+  return $true
+}
 Write-UpdateProgress "Installer started; reading update state."
 try {
   # CEP writes the state file as UTF-8. Windows PowerShell 5 otherwise reads
@@ -23,14 +36,14 @@ try {
   $version = $stateLines[2].TrimEnd("`r")
 } catch {
   $message = "Could not read the update state file as UTF-8: $($_.Exception.Message)"
-  try { Set-Content -LiteralPath $resultPath -Value @("ERROR", $message) -Encoding UTF8 } catch {}
+  Write-UpdateResult "ERROR" $message | Out-Null
   try { Add-Content -LiteralPath $logPath -Value $message } catch {}
   exit 2
 }
 if (-not (Test-Path -LiteralPath $archive)) {
   $message = "The downloaded update ZIP was not found at its saved path. It may have been removed or blocked by security software; retry to download it again."
   try { Add-Content -LiteralPath $logPath -Value "Expected update archive path: $archive" } catch {}
-  try { Set-Content -LiteralPath $resultPath -Value @("ERROR", $message) -Encoding UTF8 } catch {}
+  Write-UpdateResult "ERROR" $message | Out-Null
   exit 2
 }
 
@@ -66,7 +79,7 @@ try {
   } catch {
     $failureMessage = $_.Exception.Message
     Add-Content -LiteralPath $logPath -Value "SceneKeeper update failed: $failureMessage"
-    try { Set-Content -LiteralPath $resultPath -Value @("ERROR", $failureMessage) -Encoding UTF8 } catch {}
+    Write-UpdateResult "ERROR" $failureMessage | Out-Null
     throw
   } finally {
     if ($work -and (Test-Path -LiteralPath $work)) { Remove-Item -LiteralPath $work -Recurse -Force }
@@ -76,4 +89,4 @@ try {
   exit 10
 }
 try { Stop-Transcript | Out-Null } catch {}
-Set-Content -LiteralPath $resultPath -Value @("INSTALLED", $version) -Encoding UTF8
+if (-not (Write-UpdateResult "INSTALLED" $version)) { exit 11 }
