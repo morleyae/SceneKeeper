@@ -100,9 +100,11 @@ test("enforces one installation and permits reset and reactivation", async () =>
   assert.equal((await worker.fetch(makeRequest("/api/verify", {
     body: { licenseKey: licenseKey.toLowerCase(), deviceId: first.deviceId }
   }), env)).status, 200);
-  assert.equal((await worker.fetch(makeRequest("/api/activate", {
+  const alreadyUsed = await worker.fetch(makeRequest("/api/activate", {
     body: { licenseKey, deviceId: "different-installation-id-0002" }
-  }), env)).status, 403);
+  }), env);
+  assert.equal(alreadyUsed.status, 409);
+  assert.equal((await json(alreadyUsed)).error, "DEVICE_ALREADY_ACTIVATED");
 
   assert.equal((await worker.fetch(makeRequest("/admin/reset-device", {
     token: ADMIN_TOKEN,
@@ -124,8 +126,12 @@ test("revoked licenses cannot be verified or activated", async () => {
     token: ADMIN_TOKEN,
     body: { licenseKey }
   }), env)).status, 200);
-  assert.equal((await worker.fetch(makeRequest("/api/verify", { body: credentials }), env)).status, 403);
-  assert.equal((await worker.fetch(makeRequest("/api/activate", { body: credentials }), env)).status, 403);
+  const verifyRevoked = await worker.fetch(makeRequest("/api/verify", { body: credentials }), env);
+  const activateRevoked = await worker.fetch(makeRequest("/api/activate", { body: credentials }), env);
+  assert.equal(verifyRevoked.status, 403);
+  assert.equal((await json(verifyRevoked)).error, "LICENSE_REVOKED");
+  assert.equal(activateRevoked.status, 403);
+  assert.equal((await json(activateRevoked)).error, "LICENSE_REVOKED");
 });
 
 test("responds to preflight requests with CORS headers", async () => {

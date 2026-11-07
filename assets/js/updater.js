@@ -59,7 +59,11 @@
     "1.0.51": ["Small test release to verify automatic update detection and installation."],
     "1.0.52": ["The Windows updater extracts beside the extension for a same-drive folder swap and reports each replacement step separately."],
     "1.0.53": ["Windows updates now use the known per-user CEP install path and direct Unicode-safe file operations."],
-    "1.0.54": ["Small test release to verify automatic update detection and installation."]
+    "1.0.54": ["Small test release to verify automatic update detection and installation."],
+    "1.0.55": [
+      "License errors now explain whether the issue is a network timeout, DNS, secure connection, server response, or local storage problem.",
+      "The license service now reports invalid, revoked, and already-used-on-another-device keys separately."
+    ]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");

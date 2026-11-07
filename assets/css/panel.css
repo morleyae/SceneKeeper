@@ -629,6 +629,7 @@
       min-height: 17px;
       margin: 8px 0 !important;
       font-size: 10px;
+      white-space: pre-line;
     }
     .license-support-note {
       margin: 7px 0 0 !important;

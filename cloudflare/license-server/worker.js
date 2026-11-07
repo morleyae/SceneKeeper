@@ -83,6 +83,15 @@ async function handleActivation(request, env) {
   }
 
   const keyHash = await licenseHash(body.licenseKey);
+  const license = await env.DB.prepare(
+    "SELECT status, device_id FROM licenses WHERE key_hash = ?"
+  ).bind(keyHash).first();
+  if (!license) return jsonResponse({ error: "LICENSE_NOT_FOUND" }, 404);
+  if (license.status !== "active") return jsonResponse({ error: "LICENSE_REVOKED" }, 403);
+  if (license.device_id && license.device_id !== body.deviceId) {
+    return jsonResponse({ error: "DEVICE_ALREADY_ACTIVATED" }, 409);
+  }
+
   const now = new Date().toISOString();
   const result = await env.DB.prepare(
     "UPDATE licenses SET device_id = ?, activated_at = COALESCE(activated_at, ?) " +
@@ -90,7 +99,7 @@ async function handleActivation(request, env) {
   ).bind(body.deviceId, now, keyHash, body.deviceId).run();
 
   if (!result.meta || result.meta.changes !== 1) {
-    return jsonResponse({ error: "This license is invalid, revoked, or already activated on another device." }, 403);
+    return jsonResponse({ error: "ACTIVATION_CONFLICT" }, 409);
   }
 
   return jsonResponse({ valid: true, checkedAt: Date.now() });
@@ -107,9 +116,9 @@ async function handleVerification(request, env) {
     "SELECT status, device_id FROM licenses WHERE key_hash = ?"
   ).bind(keyHash).first();
 
-  if (!license || license.status !== "active" || license.device_id !== body.deviceId) {
-    return jsonResponse({ error: "This license is invalid, revoked, or activated on another device." }, 403);
-  }
+  if (!license) return jsonResponse({ error: "LICENSE_NOT_FOUND" }, 404);
+  if (license.status !== "active") return jsonResponse({ error: "LICENSE_REVOKED" }, 403);
+  if (license.device_id !== body.deviceId) return jsonResponse({ error: "DEVICE_MISMATCH" }, 409);
 
   return jsonResponse({ valid: true, checkedAt: Date.now() });
 }
