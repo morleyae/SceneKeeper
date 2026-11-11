@@ -116,11 +116,6 @@
     const saveClipScale = document.getElementById("save-clip-scale");
     const saveClipAudio = document.getElementById("save-clip-audio");
     const cancelSaveClipButton = document.getElementById("cancel-save-clip-button");
-    const longClipConfirmation = document.getElementById("long-clip-confirmation");
-    const longClipConfirmationText = document.getElementById("long-clip-confirmation-text");
-    const saveLongClipButton = document.getElementById("save-long-clip-button");
-    const shortenLongClipButton = document.getElementById("shorten-long-clip-button");
-    const saveFirst10SecondsButton = document.getElementById("save-first-10-seconds-button");
     const replaceClipConfirmation = document.getElementById("replace-clip-confirmation");
     const replaceClipConfirmationText = document.getElementById("replace-clip-confirmation-text");
     const confirmClipReplacementButton = document.getElementById("confirm-clip-replacement-button");
@@ -4148,7 +4143,7 @@
       function addClipEntry(record) {
         const folder = favoriteFolders.find((entry) => entry.id === record.folderId);
         const displayName = getClipDisplayName(record);
-        const details = `${formatTimestamp(record.sourceIn)}–${formatTimestamp(record.sourceOut)}`;
+        const details = formatTimestamp(record.sourceIn);
         createResultButton({
           type: "clip",
           key: `clip:${record.storageIndex}`,
@@ -5336,7 +5331,7 @@
       });
     }
 
-    function saveClipToFolder(folderId, confirmLongClip = false, saveFirstTenSeconds = false) {
+    function saveClipToFolder(folderId) {
       const destinationFolderId = folderId || "";
       if (!destinationFolderId) {
         setResult("Please select or create a folder before saving a clip.", "error");
@@ -5354,18 +5349,7 @@
         setGuidedTourStep("saving");
       }
       saveClipDialog.hidden = true;
-      callAE(`saveSelectedClipFavorite(${encodedFolderId}, ${saveClipPosition.checked}, ${saveClipScale.checked}, ${saveClipAudio.checked}, ${encodedCustomName}, ${confirmLongClip}, ${saveFirstTenSeconds})`, "Clip saved.", (response) => {
-        if (response.indexOf("LONG_CLIP_CONFIRM|") === 0) {
-          if (isGuidedTutorialSave) {
-            guidedTourBusy = false;
-            setGuidedTourStep("saveExample");
-          }
-          const duration = Number(response.split("|")[1]);
-          longClipConfirmationText.textContent = `This clip is ${formatTimestamp(duration)} long. Save its full length, or shorten it in After Effects first?`;
-          longClipConfirmation.hidden = false;
-          shortenLongClipButton.focus();
-          return;
-        }
+      callAE(`saveSelectedClipFavorite(${encodedFolderId}, ${saveClipPosition.checked}, ${saveClipScale.checked}, ${saveClipAudio.checked}, ${encodedCustomName})`, "Clip saved.", (response) => {
         if (response.indexOf("DUPLICATE_CLIP|") === 0) {
           if (isGuidedTutorialSave) {
             guidedTourBusy = false;
@@ -5450,32 +5434,18 @@
       catch (error) { return value || ""; }
     }
 
-    function runQuickSaveBatch(startAtIndex = 0, confirmLongClip = false, saveFirstTenSeconds = false) {
+    function runQuickSaveBatch(startAtIndex = 0) {
       if (!pendingQuickSaveBatch) return;
       quickSaveSelectedClipsButton.disabled = true;
       const batch = pendingQuickSaveBatch;
       const encodedFolderId = JSON.stringify(encodeURIComponent(batch.folderId));
       const saveFunction = batch.oneTimeFolder ? "saveSelectedClipsToFolderOnce" : "quickSaveSelectedClipsToFolder";
       callAE(
-        `${saveFunction}(${encodedFolderId}, ${batch.savePosition}, ${batch.saveScale}, ${batch.saveAudio}, ${startAtIndex}, ${confirmLongClip}, ${saveFirstTenSeconds})`,
+        `${saveFunction}(${encodedFolderId}, ${batch.savePosition}, ${batch.saveScale}, ${batch.saveAudio}, ${startAtIndex})`,
         "",
         (response) => {
           quickSaveSelectedClipsButton.disabled = false;
           const fields = String(response || "").split("|");
-          if (fields[0] === "LONG_CLIP_CONFIRM") {
-            batch.savedCount += Number(fields[3]) || 0;
-            const failures = decodeQuickSaveField(fields[5]);
-            const lastClipId = decodeQuickSaveField(fields[6]);
-            const warnings = decodeQuickSaveField(fields[7]);
-            if (failures) batch.failures.push(failures);
-            if (warnings) batch.longClipWarnings.push(warnings);
-            if (lastClipId) batch.lastClipId = lastClipId;
-            batch.nextLayerIndex = Number(fields[2]) || 0;
-            longClipConfirmationText.textContent = `This clip is ${formatTimestamp(Number(fields[1]))} long. Save its full length, or shorten it in After Effects first?`;
-            longClipConfirmation.hidden = false;
-            shortenLongClipButton.focus();
-            return;
-          }
           if (fields[0] !== "QUICKSAVE_DONE") {
             pendingQuickSaveBatch = null;
             setResult(response || "Could not save the selected clips.", "error");
@@ -5488,10 +5458,8 @@
           batch.savedCount += Number(fields[1]) || 0;
           const folderName = decodeQuickSaveField(fields[2]);
           const failures = decodeQuickSaveField(fields[3]);
-          const clipId = decodeQuickSaveField(fields[4]) || batch.lastClipId || "";
-          const warnings = decodeQuickSaveField(fields[5]);
+          const clipId = decodeQuickSaveField(fields[4]);
           if (failures) batch.failures.push(failures);
-          if (warnings) batch.longClipWarnings.push(warnings);
           pendingQuickSaveBatch = null;
           refreshFavorites(!clipId, "", undefined, () => {
             if (batch.oneTimeFolder) {
@@ -5499,8 +5467,6 @@
             }
             const success = `Saved ${batch.savedCount} clip${batch.savedCount === 1 ? "" : "s"}${folderName ? ` to ${folderName}` : ""}.`;
             const notices = batch.failures.slice();
-            if (batch.skippedLongClipCount) notices.push(`${batch.skippedLongClipCount} long clip${batch.skippedLongClipCount === 1 ? " was" : "s were"} not saved. Shorten ${batch.skippedLongClipCount === 1 ? "it" : "them"} in After Effects and save again.`);
-            if (batch.longClipWarnings.length) notices.push(`Saved at full length: ${batch.longClipWarnings.join("; ")}.`);
             setResult(notices.length ? `${success} ${notices.join(" ")}` : success, notices.length ? "warning" : "success");
             if (guidedTourActive && guidedTourStep === "saving") {
               guidedTourBusy = false;
@@ -5587,10 +5553,7 @@
         saveScale: saveDefaultScale.checked,
         saveAudio: saveDefaultAudio.checked,
         savedCount: 0,
-        skippedLongClipCount: 0,
         failures: [],
-        longClipWarnings: [],
-        lastClipId: "",
         oneTimeFolder: false
       };
       if (guidedTourActive && guidedTourStep === "saveAction") {
@@ -5616,10 +5579,7 @@
           saveScale: saveDefaultScale.checked,
           saveAudio: saveDefaultAudio.checked,
           savedCount: 0,
-          skippedLongClipCount: 0,
           failures: [],
-          longClipWarnings: [],
-          lastClipId: "",
           oneTimeFolder: true
         };
         runQuickSaveBatch();
@@ -5650,48 +5610,6 @@
       saveClipOptionsDetails.hidden = false;
       clearSelectedClipCapture();
     });
-    saveLongClipButton.addEventListener("click", () => {
-      if (pendingQuickSaveBatch) {
-        const nextIndex = pendingQuickSaveBatch.nextLayerIndex;
-        longClipConfirmation.hidden = true;
-        runQuickSaveBatch(nextIndex, true);
-        return;
-      }
-      longClipConfirmation.hidden = true;
-      saveClipToFolder(saveClipSelectedFolderId || saveClipPickerFolderId, true);
-    });
-    shortenLongClipButton.addEventListener("click", () => {
-      if (pendingQuickSaveBatch) {
-        pendingQuickSaveBatch.skippedLongClipCount++;
-        const nextIndex = pendingQuickSaveBatch.nextLayerIndex + 1;
-        longClipConfirmation.hidden = true;
-        runQuickSaveBatch(nextIndex, false);
-        return;
-      }
-      longClipConfirmation.hidden = true;
-      clearSelectedClipCapture();
-      setResult("Clip was not saved. Shorten it in After Effects, then save it again.", "");
-    });
-    saveFirst10SecondsButton.addEventListener("click", () => {
-      if (pendingQuickSaveBatch) {
-        const nextIndex = pendingQuickSaveBatch.nextLayerIndex;
-        longClipConfirmation.hidden = true;
-        runQuickSaveBatch(nextIndex, false, true);
-        return;
-      }
-      longClipConfirmation.hidden = true;
-      saveClipToFolder(saveClipSelectedFolderId || saveClipPickerFolderId, false, true);
-    });
-    longClipConfirmation.addEventListener("click", (event) => {
-      if (event.target === longClipConfirmation) {
-        longClipConfirmation.hidden = true;
-        pendingQuickSaveBatch = null;
-        quickSaveSelectedClipsButton.disabled = false;
-        clearSelectedClipCapture();
-        setResult("Clip was not saved. Shorten it in After Effects, then save it again.", "");
-      }
-    });
-
     confirmClipReplacementButton.addEventListener("click", () => {
       if (pendingClipReplacementIndex === null) return;
       const replacementIndex = pendingClipReplacementIndex;
@@ -7598,14 +7516,7 @@
           let clipId = "";
           try { clipId = decodeURIComponent(responseParts[1] || ""); }
           catch (decodeError) { clipId = responseParts[1] || ""; }
-          let longClipWarnings = "";
-          try { longClipWarnings = decodeURIComponent(responseParts[2] || ""); }
-          catch (decodeError) { longClipWarnings = responseParts[2] || ""; }
-          refreshFavorites(false, "", undefined, () => {
-            if (longClipWarnings) {
-              setResult(`Quick Save: long clips were saved at full length: ${longClipWarnings}.`, "warning");
-            }
-          }, true, clipId, true);
+          refreshFavorites(false, "", undefined, undefined, true, clipId, true);
         }
       });
     }

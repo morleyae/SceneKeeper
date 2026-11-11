@@ -4,6 +4,8 @@
   const noticeMessage = document.getElementById("scene-keeper-update-message");
   const retryUpdateButton = document.getElementById("scene-keeper-retry-update");
   const reopenPanelButton = document.getElementById("scene-keeper-reopen-panel");
+  const continueWithoutUpdateButton = document.getElementById("scene-keeper-continue-without-update");
+  const manualUpdateLink = document.getElementById("scene-keeper-manual-update-link");
   const versionLabel = document.getElementById("scene-keeper-version");
   const creatorLink = document.getElementById("scene-keeper-creator-link");
   const CHECK_INTERVAL_MS = 12 * 60 * 60 * 1000;
@@ -63,6 +65,11 @@
     "1.0.55": [
       "License errors now explain whether the issue is a network timeout, DNS, secure connection, server response, or local storage problem.",
       "The license service now reports invalid, revoked, and already-used-on-another-device keys separately."
+    ],
+    "1.0.56": [
+      "Long clips now save at their full length without an extra confirmation. Saved previews still use only the first 10 seconds.",
+      "Clip cards show the source in-point only, and clips ending at the footage boundary are no longer rejected because of frame rounding.",
+      "Update notices now use a full-screen view with a manual download link, support guidance, and an option to continue without updating."
     ]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
@@ -74,6 +81,7 @@
   let scheduledVersion = "";
   let nextCheckTimer = null;
   let noticeHideTimer = null;
+  let continueWithoutUpdateThisSession = false;
 
   function revealNotice() {
     if (!notice) return;
@@ -275,7 +283,7 @@
     callback(null);
   }
 
-  function showNotice(version) {
+  function showNotice(version, canContinueWithoutUpdate) {
     if (!notice) return;
     if (noticeMessage) noticeMessage.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs. This message will update when installation is complete.`;
     else notice.textContent = `SceneKeeper ${version} is ready to install. You can keep working while the installer runs. This message will update when installation is complete.`;
@@ -284,11 +292,12 @@
       retryUpdateButton.disabled = false;
       retryUpdateButton.textContent = "Retry Update Install";
     }
+    if (continueWithoutUpdateButton) continueWithoutUpdateButton.hidden = !canContinueWithoutUpdate;
     revealNotice();
   }
 
   function showInstallerStarted(version) {
-    showNotice(version);
+    showNotice(version, false);
     if (noticeMessage) {
       noticeMessage.textContent = `Installing ${version} while After Effects stays open. This message will update when it is installed.`;
     }
@@ -298,10 +307,26 @@
     }
   }
 
+  function showDevUpdateScreen() {
+    showNotice("v1.0.56 (test)", true);
+    if (noticeMessage) {
+      noticeMessage.textContent = "This is a preview of the update screen. The update could not be installed. No files were downloaded or changed.";
+    }
+    if (retryUpdateButton) {
+      retryUpdateButton.hidden = false;
+      retryUpdateButton.disabled = false;
+      retryUpdateButton.textContent = "Retry Update Install";
+    }
+    if (reopenPanelButton) reopenPanelButton.hidden = true;
+    if (continueWithoutUpdateButton) continueWithoutUpdateButton.hidden = false;
+    revealNotice();
+  }
+
   function setNoticeMessage(message) {
     if (!notice) return;
     if (noticeMessage) noticeMessage.textContent = String(message || "");
     else notice.textContent = String(message || "");
+    if (continueWithoutUpdateButton) continueWithoutUpdateButton.hidden = false;
     revealNotice();
   }
 
@@ -351,6 +376,7 @@
           retryUpdateButton.disabled = false;
           retryUpdateButton.textContent = archiveMissing ? "Download Update Again" : "Retry Update Install";
         }
+        if (continueWithoutUpdateButton) continueWithoutUpdateButton.hidden = false;
         scheduledVersion = "";
         return;
       }
@@ -367,6 +393,7 @@
         retryUpdateButton.disabled = false;
         retryUpdateButton.textContent = "Retry Update Install";
       }
+      if (continueWithoutUpdateButton) continueWithoutUpdateButton.hidden = false;
       scheduledVersion = "";
       return;
     }
@@ -397,7 +424,8 @@
   function showUpdateProblem(message) {
     const pendingVersion = getPendingUpdateVersion();
     if (pendingVersion && compareVersions(config.currentVersion, pendingVersion) < 0) {
-      showNotice(pendingVersion);
+      showNotice(pendingVersion, true);
+      if (noticeMessage) noticeMessage.textContent = String(message || "");
       return;
     }
     setNoticeMessage(message);
@@ -408,6 +436,7 @@
     else notice.textContent = "";
     if (retryUpdateButton) retryUpdateButton.hidden = true;
     if (reopenPanelButton) reopenPanelButton.hidden = true;
+    if (continueWithoutUpdateButton) continueWithoutUpdateButton.hidden = true;
     notice.classList.remove("is-visible");
     if (noticeHideTimer) clearTimeout(noticeHideTimer);
     noticeHideTimer = window.setTimeout(() => {
@@ -561,7 +590,17 @@
       clearNotice();
       return;
     }
-    showNotice(pendingVersion);
+    const cep = window.__adobe_cep__;
+    const fs = window.cep && window.cep.fs;
+    const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
+    const resultPath = `${userData}/SceneKeeper/updates/pending-update.json.result`;
+    const result = fs && typeof fs.readFile === "function" ? fs.readFile(resultPath) : null;
+    const failed = result && result.err === 0 && result.data && String(result.data).split(/\r?\n/)[0] === "ERROR";
+    showNotice(pendingVersion, Boolean(failed));
+    if (failed && noticeMessage) {
+      const details = String(result.data).split(/\r?\n/).slice(1).join(" ").trim();
+      noticeMessage.textContent = `SceneKeeper ${pendingVersion} could not be installed${details ? `: ${details}` : ". Please retry the installation."}`;
+    }
   }
 
   if (whatsNewClose) {
@@ -593,6 +632,7 @@
   }
 
   function scheduleNextCheck(delay) {
+    if (continueWithoutUpdateThisSession) return;
     if (nextCheckTimer !== null) window.clearTimeout(nextCheckTimer);
     nextCheckTimer = window.setTimeout(() => {
       nextCheckTimer = null;
@@ -601,7 +641,7 @@
   }
 
   function checkForUpdates(forceCheck) {
-    if (config.development) return;
+    if (config.development || continueWithoutUpdateThisSession) return;
     if (checkInFlight) return;
     if (!config.repository || !config.currentVersion || !notice) return;
 
@@ -612,7 +652,17 @@
 
     const pendingVersion = getPendingUpdateVersion();
     if (pendingVersion && compareVersions(config.currentVersion, pendingVersion) < 0) {
-      showNotice(pendingVersion);
+      const cep = window.__adobe_cep__;
+      const fs = window.cep && window.cep.fs;
+      const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
+      const resultPath = `${userData}/SceneKeeper/updates/pending-update.json.result`;
+      const result = fs && typeof fs.readFile === "function" ? fs.readFile(resultPath) : null;
+      const failed = result && result.err === 0 && result.data && String(result.data).split(/\r?\n/)[0] === "ERROR";
+      showNotice(pendingVersion, Boolean(failed));
+      if (failed && noticeMessage) {
+        const details = String(result.data).split(/\r?\n/).slice(1).join(" ").trim();
+        noticeMessage.textContent = `SceneKeeper ${pendingVersion} could not be installed${details ? `: ${details}` : ". Please retry the installation."}`;
+      }
       scheduleNextCheck(CHECK_INTERVAL_MS);
       return;
     }
@@ -627,6 +677,7 @@
     checkInFlight = true;
     requestJson(`https://api.github.com/repos/${config.repository}/releases/latest`, (releaseError, release) => {
       checkInFlight = false;
+      if (continueWithoutUpdateThisSession) return;
       if (releaseError) {
         showUpdateProblem("Could not check for SceneKeeper updates. The panel will retry automatically.");
         scheduleNextCheck(RETRY_INTERVAL_MS);
@@ -658,6 +709,7 @@
       }
       const archivePath = `${updateDirectory}/${asset.name}`;
       downloadFile(asset.browser_download_url, archivePath, (downloadError) => {
+        if (continueWithoutUpdateThisSession) return;
         if (downloadError) {
           showUpdateProblem(`SceneKeeper ${release.tag_name} was found, but the download failed. It will retry automatically.`);
           clearLastCheckTime();
@@ -687,7 +739,64 @@
     const whatsNewShown = showWhatsNew(previouslyInstalledVersion, pendingVersionBeforeRestore);
     if (!whatsNewShown) storeCurrentVersion();
     if (retryUpdateButton) retryUpdateButton.addEventListener("click", retryPendingInstallation);
+    if (continueWithoutUpdateButton) {
+      continueWithoutUpdateButton.addEventListener("click", () => {
+        continueWithoutUpdateThisSession = true;
+        clearPendingUpdateVersion();
+        scheduledVersion = "";
+        if (nextCheckTimer !== null) window.clearTimeout(nextCheckTimer);
+        nextCheckTimer = null;
+        clearNotice();
+      });
+    }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible" || !continueWithoutUpdateThisSession) return;
+      continueWithoutUpdateThisSession = false;
+      checkForUpdates(true);
+    });
+    [manualUpdateLink].forEach((link) => {
+      if (!link) return;
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const cep = window.cep || window.__adobe_cep__;
+        if (cep && cep.util && typeof cep.util.openURLInDefaultBrowser === "function") {
+          cep.util.openURLInDefaultBrowser(link.href);
+        } else {
+          window.open(link.href, "_blank", "noopener");
+        }
+      });
+    });
     if (window.SceneKeeperAppReady) checkForUpdates(true);
     else window.addEventListener("scenekeeper-app-ready", () => checkForUpdates(true), { once: true });
+  } else {
+    if (versionLabel) {
+      versionLabel.title = "Click to preview the update screen";
+      versionLabel.style.cursor = "pointer";
+      versionLabel.addEventListener("click", (event) => {
+        event.preventDefault();
+        showDevUpdateScreen();
+      });
+    }
+    if (retryUpdateButton) {
+      retryUpdateButton.addEventListener("click", () => {
+        if (!notice || notice.hidden) return;
+        if (noticeMessage) noticeMessage.textContent = "Retry clicked. This is only a preview; no update was downloaded or installed.";
+      });
+    }
+    if (continueWithoutUpdateButton) {
+      continueWithoutUpdateButton.addEventListener("click", clearNotice);
+    }
+    [manualUpdateLink].forEach((link) => {
+      if (!link) return;
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const cep = window.cep || window.__adobe_cep__;
+        if (cep && cep.util && typeof cep.util.openURLInDefaultBrowser === "function") {
+          cep.util.openURLInDefaultBrowser(link.href);
+        } else {
+          window.open(link.href, "_blank", "noopener");
+        }
+      });
+    });
   }
 })();

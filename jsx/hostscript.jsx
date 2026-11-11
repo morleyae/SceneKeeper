@@ -2398,7 +2398,7 @@ function cancelClipFavoriteCapture() {
     return "Clip selection cleared.";
 }
 
-function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, saveAudioState, encodedCustomName, confirmLongClip, saveFirstTenSeconds) {
+function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, saveAudioState, encodedCustomName) {
     if (savePosition === undefined) {
         savePosition = true;
     }
@@ -2475,16 +2475,23 @@ function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, save
     }
     var sourceIn = layer.inPoint - layer.startTime;
     var sourceOut = layer.outPoint - layer.startTime;
-    if (sourceIn < 0 || sourceOut <= sourceIn || sourceOut > layer.source.duration) {
-        return "ERROR: The visible clip range is outside the footage duration.";
+    var sourceDuration = Number(layer.source.duration);
+    var sourceFrameDuration = Number(layer.source.frameDuration);
+    var compFrameDuration = Number(comp.frameDuration);
+    var boundaryTolerance = Math.max(
+        isNaN(sourceFrameDuration) || sourceFrameDuration <= 0 ? 0 : sourceFrameDuration,
+        isNaN(compFrameDuration) || compFrameDuration <= 0 ? 0 : compFrameDuration,
+        0.0001
+    );
+    if (sourceIn < 0 && sourceIn >= -boundaryTolerance) sourceIn = 0;
+    if (sourceOut > sourceDuration && sourceOut <= sourceDuration + boundaryTolerance) {
+        sourceOut = sourceDuration;
     }
-    if (saveFirstTenSeconds === true) {
-        sourceOut = Math.min(sourceOut, sourceIn + 10);
+    if (isNaN(sourceDuration) || sourceDuration <= 0 || sourceIn < 0 || sourceOut <= sourceIn || sourceOut > sourceDuration) {
+        return "ERROR: The visible clip range is outside the footage duration (source " +
+            sourceIn.toFixed(4) + "–" + sourceOut.toFixed(4) + "s; footage " +
+            sourceDuration.toFixed(4) + "s).";
     }
-    if (sourceOut - sourceIn >= 180 && confirmLongClip !== true && saveFirstTenSeconds !== true) {
-        return "LONG_CLIP_CONFIRM|" + (sourceOut - sourceIn);
-    }
-
     var records = readClipFavoriteRecords();
     var displayName = decodeURIComponent(encodedCustomName || "").replace(/^\s+|\s+$/g, "");
     var hasCustomName = displayName !== "";
@@ -2581,13 +2588,10 @@ function getSceneKeeperQuickSaveStatus() {
     return getSceneKeeperQuickSaveRevision() + "|" + encodeURIComponent(
         app.settings.haveSetting("SceneKeeper Quick Save", "RefreshClipId")
             ? app.settings.getSetting("SceneKeeper Quick Save", "RefreshClipId")
-            : "") + "|" + encodeURIComponent(
-        app.settings.haveSetting("SceneKeeper Quick Save", "RefreshWarning")
-            ? app.settings.getSetting("SceneKeeper Quick Save", "RefreshWarning")
             : "");
 }
 
-function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, confirmLongClip, saveFirstTenSeconds, folderIdOverride, savePositionOverride, saveScaleOverride, saveAudioOverride) {
+function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, folderIdOverride, savePositionOverride, saveScaleOverride, saveAudioOverride) {
     var comp = getActiveComp();
     if (!comp) return "ERROR: Select footage clips in an active composition first.";
     if (typeof folderIdOverride !== "string" && !app.settings.haveSetting("SceneKeeper Quick Save", "FolderId")) {
@@ -2625,7 +2629,6 @@ function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, co
         app.settings.getSetting("SceneKeeper Quick Save", "SaveAudio") === "1");
     var savedCount = 0;
     var failures = [];
-    var longClipWarnings = [];
     var lastSavedClipId = "";
     var firstLayerIndex = Math.max(0, parseInt(startAtIndex, 10) || 0);
     for (var layerIndex = firstLayerIndex; layerIndex < selectedLayers.length; layerIndex++) {
@@ -2634,25 +2637,11 @@ function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, co
         var result;
         try {
             result = saveSelectedClipFavorite(
-                encodeURIComponent(folderId), savePosition, saveScale, saveAudio, "",
-                confirmLongClip === true || skipRevisionUpdate !== true, saveFirstTenSeconds === true);
-            if (result.indexOf("LONG_CLIP_CONFIRM|") === 0) {
-                pendingClipFavoriteCapture = null;
-                pendingClipFavoriteReplacement = null;
-                return "LONG_CLIP_CONFIRM|" + result.split("|")[1] + "|" + layerIndex + "|" + savedCount + "|" +
-                    encodeURIComponent(folderName) + "|" + encodeURIComponent(failures.join(" | ")) + "|" +
-                    encodeURIComponent(lastSavedClipId) + "|" + encodeURIComponent(longClipWarnings.join("; "));
-            }
+                encodeURIComponent(folderId), savePosition, saveScale, saveAudio, "");
             if (result.indexOf("DUPLICATE_CLIP|") === 0) result = confirmClipFavoriteReplacement();
             if (result.indexOf("Saved clip:") === 0 || result.indexOf("Replaced clip:") === 0) {
                 savedCount++;
                 lastSavedClipId = lastClipFavoriteSavedId;
-                var savedSourceDuration = layer.outPoint - layer.inPoint;
-                if (!saveFirstTenSeconds && savedSourceDuration >= 180) {
-                    var wholeSeconds = Math.round(savedSourceDuration);
-                    var durationLabel = Math.floor(wholeSeconds / 60) + ":" + ("0" + (wholeSeconds % 60)).slice(-2);
-                    longClipWarnings.push(layer.name + " (" + durationLabel + ")");
-                }
             } else {
                 failures.push(layer.name + ": " + String(result).replace(/^ERROR:\s*/, ""));
             }
@@ -2669,19 +2658,18 @@ function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, co
         var revision = parseInt(getSceneKeeperQuickSaveRevision(), 10);
         if (isNaN(revision)) revision = 0;
         app.settings.saveSetting("SceneKeeper Quick Save", "RefreshClipId", lastSavedClipId);
-        app.settings.saveSetting("SceneKeeper Quick Save", "RefreshWarning", longClipWarnings.join("; "));
         app.settings.saveSetting("SceneKeeper Quick Save", "RefreshRevision", String(revision + 1));
     }
-    return "QUICKSAVE_DONE|" + savedCount + "|" + encodeURIComponent(folderName) + "|" + encodeURIComponent(failures.join(" | ")) + "|" + encodeURIComponent(lastSavedClipId) + "|" + encodeURIComponent(longClipWarnings.join("; "));
+    return "QUICKSAVE_DONE|" + savedCount + "|" + encodeURIComponent(folderName) + "|" + encodeURIComponent(failures.join(" | ")) + "|" + encodeURIComponent(lastSavedClipId);
 }
 
-function quickSaveSelectedClipsToFolder(encodedFolderId, savePosition, saveScale, saveAudioState, startAtIndex, confirmLongClip, saveFirstTenSeconds) {
+function quickSaveSelectedClipsToFolder(encodedFolderId, savePosition, saveScale, saveAudioState, startAtIndex) {
     var settingsResult = storeClipQuickSaveShortcutSettings(encodedFolderId, savePosition, saveScale, saveAudioState);
     if (String(settingsResult).indexOf("ERROR:") === 0) return settingsResult;
-    return quickSaveSelectedClipsFromShortcut(true, startAtIndex, confirmLongClip, saveFirstTenSeconds);
+    return quickSaveSelectedClipsFromShortcut(true, startAtIndex);
 }
 
-function saveSelectedClipsToFolderOnce(encodedFolderId, savePosition, saveScale, saveAudioState, startAtIndex, confirmLongClip, saveFirstTenSeconds) {
+function saveSelectedClipsToFolderOnce(encodedFolderId, savePosition, saveScale, saveAudioState, startAtIndex) {
     var folderId;
     try {
         folderId = decodeURIComponent(encodedFolderId || "");
@@ -2689,7 +2677,7 @@ function saveSelectedClipsToFolderOnce(encodedFolderId, savePosition, saveScale,
         return "ERROR: The selected save folder is invalid.";
     }
     return quickSaveSelectedClipsFromShortcut(
-        true, startAtIndex, confirmLongClip, saveFirstTenSeconds,
+        true, startAtIndex,
         folderId, savePosition === true, saveScale === true, saveAudioState === true);
 }
 
