@@ -4,7 +4,7 @@ SceneKeeper is an Adobe After Effects panel for saving, organizing, previewing, 
 
 ## Download
 
-Download the latest installer ZIP from the [SceneKeeper Releases page](https://github.com/morleyae/SceneKeeper/releases/latest). Choose `SceneKeeper-vX.Y.Z-macOS.zip` or `SceneKeeper-vX.Y.Z-Windows.zip` for your operating system, then extract it before installing.
+Download the latest installer ZIP from the [SceneKeeper Releases page](https://github.com/morleyae/SceneKeeper/releases/latest). Extract `SceneKeeper-vX.Y.Z.zip`; it contains the installer for macOS and Windows.
 
 ## Install
 

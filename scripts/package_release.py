@@ -19,24 +19,20 @@ INCLUDED_PATHS = (
     "jsx",
     "scripts",
     "index.html",
+    "install-macos.command",
+    "install-windows.bat",
     "README.md",
     "README_EN.md",
 )
-PLATFORM_INSTALLERS = {
-    "macOS": "install-macos.command",
-    "Windows": "install-windows.bat",
-}
 
 
-def build_archive(tag: str, platform: str, installer: str = "") -> Path:
+def build_archive(tag: str) -> Path:
     version = tag[1:]
     dist = ROOT / "dist"
-    staging_root = dist / f"staging-{platform}"
-    staging = staging_root / "SceneKeeper"
-    archive_name = f"SceneKeeper-{tag}-{platform}.zip" if installer else f"SceneKeeper-{tag}.zip"
-    archive = dist / archive_name
-    if staging_root.exists():
-        shutil.rmtree(staging_root)
+    staging = dist / "SceneKeeper"
+    archive = dist / f"SceneKeeper-{tag}.zip"
+    if staging.exists():
+        shutil.rmtree(staging)
     staging.mkdir(parents=True)
 
     for item in INCLUDED_PATHS:
@@ -49,9 +45,6 @@ def build_archive(tag: str, platform: str, installer: str = "") -> Path:
         else:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
-
-    if installer:
-        shutil.copy2(ROOT / installer, staging / installer)
 
     manifest_path = staging / "CSXS" / "manifest.xml"
     manifest = manifest_path.read_text(encoding="utf-8")
@@ -86,9 +79,7 @@ def main() -> int:
         return 2
 
     tag = sys.argv[1]
-    for platform, installer in PLATFORM_INSTALLERS.items():
-        build_archive(tag, platform, installer)
-    build_archive(tag, "update")
+    build_archive(tag)
     return 0
 
 

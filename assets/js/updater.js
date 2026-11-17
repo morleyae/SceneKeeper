@@ -464,8 +464,13 @@
     if (!version || compareVersions(config.currentVersion, version) >= 0) return;
     const cep = window.__adobe_cep__;
     const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
-    const archivePath = `${userData}/SceneKeeper/updates/${getPlatformArchiveName(version)}`;
     const fs = window.cep && window.cep.fs;
+    const updateDirectory = `${userData}/SceneKeeper/updates`;
+    let archivePath = `${updateDirectory}/${getPlatformArchiveName(version)}`;
+    const platformArchiveStat = fs && fs.stat ? fs.stat(archivePath) : null;
+    if (!platformArchiveStat || platformArchiveStat.err !== 0) {
+      archivePath = `${updateDirectory}/SceneKeeper-${version}.zip`;
+    }
     let archiveRetryVersion = "";
     try { archiveRetryVersion = window.localStorage.getItem(ARCHIVE_RETRY_KEY) || ""; } catch (error) {}
     if (archiveRetryVersion === version) {

@@ -2,7 +2,7 @@
 
 ## Install from ZIP
 
-1. Download `SceneKeeper-vX.Y.Z-macOS.zip` or `SceneKeeper-vX.Y.Z-Windows.zip` for your operating system, extract it, and open the included `SceneKeeper` folder.
+1. Download and extract `SceneKeeper-vX.Y.Z.zip`, then open the included `SceneKeeper` folder. It contains installers for macOS and Windows.
 2. On **macOS**, double-click `install-macos.command`. If macOS blocks it on first launch, right-click the file, choose **Open**, and confirm. On **Windows**, double-click `install-windows.bat`.
 3. The installer creates the CEP folders if needed, copies SceneKeeper to the correct location, and enables CEP extensions for CSXS 11.
 4. Wait for the installer to finish, then start or restart After Effects and choose **Window > Extensions (Legacy) > SceneKeeper**.
