@@ -14,6 +14,7 @@
     const libraryTabs = document.getElementById("library-tabs");
     const newLibraryTabButton = document.getElementById("new-library-tab");
     const favoriteList = document.getElementById("favorite-list");
+    const clipLibraryLoading = document.getElementById("clip-library-loading");
     const favoritesSection = document.querySelector(".favorites-section");
     function syncFullscreenPanelPage() {
       const activeFullscreenPage = document.querySelector(".panel-fullscreen-modal:not([hidden])");
@@ -61,6 +62,8 @@
     const copySelectionButton = document.getElementById("copy-selection-button");
     const pasteSelectionButton = document.getElementById("paste-selection-button");
     const createFolderToggle = document.getElementById("create-folder-toggle");
+    const libraryNavBackButton = document.getElementById("library-nav-back");
+    const libraryNavForwardButton = document.getElementById("library-nav-forward");
     const folderCreateRow = document.getElementById("folder-create-row");
     const newFolderName = document.getElementById("new-folder-name");
     const createFolderButton = document.getElementById("create-folder-button");
@@ -116,10 +119,10 @@
     const saveClipScale = document.getElementById("save-clip-scale");
     const saveClipAudio = document.getElementById("save-clip-audio");
     const cancelSaveClipButton = document.getElementById("cancel-save-clip-button");
-    const replaceClipConfirmation = document.getElementById("replace-clip-confirmation");
-    const replaceClipConfirmationText = document.getElementById("replace-clip-confirmation-text");
-    const confirmClipReplacementButton = document.getElementById("confirm-clip-replacement-button");
-    const cancelClipReplacementButton = document.getElementById("cancel-clip-replacement-button");
+    const duplicateSaveConfirmation = document.getElementById("duplicate-save-confirmation");
+    const duplicateSaveConfirmationText = document.getElementById("duplicate-save-confirmation-text");
+    const confirmDuplicateSaveButton = document.getElementById("confirm-duplicate-save-button");
+    const cancelDuplicateSaveButton = document.getElementById("cancel-duplicate-save-button");
     const insertFavoriteButton = document.getElementById("insert-favorite-button");
     const extraClipActionsToggle = document.getElementById("extra-clip-actions-toggle");
     const extraClipActions = document.getElementById("extra-clip-actions");
@@ -167,6 +170,7 @@
     const libraryDataPageCloseButton = document.getElementById("library-data-page-close");
     const exportLibraryOpenButton = document.getElementById("export-library-open");
     const importLibraryOpenButton = document.getElementById("import-library-open");
+    const libraryImportLoading = document.getElementById("library-import-loading");
     const exportFootageChoiceList = document.getElementById("export-footage-choice-list");
     const exportChoiceSearch = document.getElementById("export-choice-search");
     const exportFolderToolbar = document.getElementById("export-folder-toolbar");
@@ -239,17 +243,14 @@
     const previewAutoplayState = document.getElementById("preview-autoplay-state");
     const deleteConfirmation = document.getElementById("delete-confirmation");
     const deleteConfirmationText = document.getElementById("delete-confirmation-text");
-    const importFolderConflict = document.getElementById("import-folder-conflict");
-    const importFolderConflictCopy = document.getElementById("import-folder-conflict-copy");
-    const importFolderConflictReplaceButton = document.getElementById("import-folder-conflict-replace");
-    const importFolderConflictKeepButton = document.getElementById("import-folder-conflict-keep");
-    const importFolderConflictCancelButton = document.getElementById("import-folder-conflict-cancel");
     const importSuccessConfirmation = document.getElementById("import-success-confirmation");
     const importSuccessConfirmationText = document.getElementById("import-success-confirmation-text");
     const cancelDeleteButton = document.getElementById("cancel-delete-button");
     const confirmDeleteButton = document.getElementById("confirm-delete-button");
     const importSuccessOkButton = document.getElementById("import-success-ok-button");
     let favoriteRecords = [];
+    let libraryFolderHistory = [""];
+    let libraryFolderHistoryIndex = 0;
     let guidedTourActive = false;
     let guidedTourStep = "welcome";
     let guidedTourTarget = null;
@@ -300,6 +301,7 @@
     let draggedCollectionOrderId = "";
     let favoriteFolders = [];
     let favoriteFoldersLoaded = false;
+    let favoriteListLoadCount = 0;
     const clipThumbnailCache = new Map();
     const randomMarkerSelectedFolderIds = new Set();
     const randomMarkerExcludedFolderIds = new Set();
@@ -328,8 +330,8 @@
     let saveClipDestinationOnlyMode = false;
     const expandedSaveClipFolderIds = new Set();
     const collapsedSaveClipSearchFolderIds = new Set();
-    let pendingClipReplacementIndex = null;
     let pendingQuickSaveBatch = null;
+    let pendingDuplicateSaveDecision = null;
     let exportSelectedFootagePaths = [];
     let exportSelectedFolderIds = [];
     let exportSelectionMode = "folders";
@@ -337,6 +339,7 @@
     let exportChoiceSearchQuery = "";
     const expandedExportFolderIds = new Set();
     let pendingDeleteIndex = null;
+    let pendingDeleteIndices = null;
     let pendingDeleteFootagePath = null;
     let pendingClipTrashAction = null;
     let clipTrashPreviewEntries = [];
@@ -2465,7 +2468,7 @@
 
       const isBackgroundLoad = /^(listClipFavorites|listClipFavoriteFootageStatus|listClipFolders|listClipTrash|getClipSettings|getSceneKeeperQuickSaveStatus|getRandomMarkerSkipSuggestions|getRandomMarkerNames|getSelectedRandomMarkerSlots|createSceneKeeperBackup)\(/.test(scriptCall);
       if (!isBackgroundLoad) setResult("Working...", "");
-      const libraryAction = /^(createClipFolder|moveClipFolder|renameClipFolder|renameClipFavoriteFootage|deleteClipFolder|assignClipFavoriteFolder|saveSelectedClipFavorite|quickSaveSelectedClipsToFolder|confirmClipFavoriteReplacement|renameClipFavorite|updateClipFavorite|reorderClipFavorites|reorderClipFolders|reorderClipLibraryItems|deleteClipFavorite|deleteClipFavoriteFootage|restoreClipTrashItem|relinkClipFavoriteFootage|importClipFavorites|resolveClipFavoriteImport)\(/.test(scriptCall);
+      const libraryAction = /^(createClipFolder|moveClipFolder|renameClipFolder|renameClipFavoriteFootage|deleteClipFolder|deleteClipFavorites|assignClipFavoriteFolder|saveSelectedClipFavorite|quickSaveSelectedClipsToFolder|saveSelectedClipsToFolderOnce|confirmClipFavoriteDuplicateSave|cancelClipFavoriteDuplicateSave|renameClipFavorite|updateClipFavorite|reorderClipFavorites|reorderClipFolders|reorderClipLibraryItems|deleteClipFavorite|deleteClipFavoriteFootage|restoreClipTrashItem|relinkClipFavoriteFootage|importClipFavorites)\(/.test(scriptCall);
       const timelineAction = /^(insertClipFavorite|insertClipFavoriteIntoSelectedPrecomp|insertRandomClipFavoriteForSelectedFootage|insertRandomClipsBetweenMarkers|replaceRandomMarkerClips|replaceSelectedClipFromFolders|quickReplaceSelectedClip|prepareSelectedClipReplaceSlots|deleteRandomMarkerPrecomps)\(/.test(scriptCall);
       const encodedCommand = JSON.stringify(encodeURIComponent(scriptCall));
       const hostCall = libraryAction
@@ -3233,6 +3236,9 @@
       });
     }
 
+    syncLibraryNavButtons();
+    if (libraryNavBackButton) libraryNavBackButton.addEventListener("click", () => navigateLibraryHistory("back"));
+    if (libraryNavForwardButton) libraryNavForwardButton.addEventListener("click", () => navigateLibraryHistory("forward"));
     loadSavedWorkspaces();
     workspaceSelect.addEventListener("change", () => refreshWorkspaceOptions(workspaceSelect.value));
     workspaceSaveButton.addEventListener("click", saveCurrentWorkspace);
@@ -3415,7 +3421,29 @@
 
     newLibraryTabButton.addEventListener("click", createExplorerTab);
 
-    function openLibraryLocation(folderId) {
+    function syncLibraryNavButtons() {
+      if (!libraryNavBackButton || !libraryNavForwardButton) return;
+      libraryNavBackButton.disabled = libraryFolderHistoryIndex <= 0;
+      libraryNavForwardButton.disabled = libraryFolderHistoryIndex >= libraryFolderHistory.length - 1;
+    }
+
+    function pushLibraryFolderHistory(folderId) {
+      const normalizedId = typeof folderId === "string" ? folderId : "";
+      const lastEntry = libraryFolderHistory[libraryFolderHistoryIndex];
+      if (lastEntry === normalizedId) return;
+      if (libraryFolderHistoryIndex < libraryFolderHistory.length - 1) {
+        libraryFolderHistory = libraryFolderHistory.slice(0, libraryFolderHistoryIndex + 1);
+      }
+      libraryFolderHistory.push(normalizedId);
+      if (libraryFolderHistory.length > 24) {
+        libraryFolderHistory.splice(0, libraryFolderHistory.length - 24);
+      }
+      libraryFolderHistoryIndex = libraryFolderHistory.length - 1;
+      syncLibraryNavButtons();
+    }
+
+    function openLibraryLocation(folderId, options = {}) {
+      const { recordHistory = true } = options;
       selectedFootagePath = "";
       selectedFolderId = folderId || "";
       persistQuickSaveShortcutSettings(selectedFolderId);
@@ -3424,8 +3452,23 @@
       favoriteResultsMode = selectedFootagePath ? "clips" : "footage";
       librarySearch.value = "";
       syncSearchClearButtons();
+      if (recordHistory) {
+        pushLibraryFolderHistory(selectedFolderId);
+      }
       renderFavoriteClips();
       favoriteList.scrollTop = 0;
+    }
+
+    function navigateLibraryHistory(direction) {
+      if (!libraryFolderHistory.length) return;
+      const nextIndex = direction === "back"
+        ? libraryFolderHistoryIndex - 1
+        : libraryFolderHistoryIndex + 1;
+      if (nextIndex < 0 || nextIndex >= libraryFolderHistory.length) return;
+      libraryFolderHistoryIndex = nextIndex;
+      const nextFolderId = libraryFolderHistory[nextIndex] || "";
+      openLibraryLocation(nextFolderId, { recordHistory: false });
+      syncLibraryNavButtons();
     }
 
     function handleLibraryDrop(event, folderId) {
@@ -3491,7 +3534,7 @@
       });
     }
 
-    function refreshFavoriteFolders(onLoaded) {
+    function refreshFavoriteFolders(onLoaded, onError) {
       favoriteFoldersLoaded = false;
       callAE("listClipFolders()", "", (response) => {
         const previousFolders = favoriteFolders;
@@ -3532,6 +3575,9 @@
         favoriteFoldersLoaded = true;
         renderFavoriteClips();
         if (onLoaded) onLoaded();
+      }, (message) => {
+        if (onError) onError(message);
+        else setResult(message, "error");
       });
     }
 
@@ -3813,12 +3859,18 @@
             { label: "Relink Footage", run: () => relinkFootageByPath(entry.clip.sourcePath) },
             { label: "Reveal Footage", run: () => callAE(`revealClipFavoriteFootage(${entry.clip.storageIndex})`, "") },
             { label: "Delete", danger: true, run: (deleteEvent) => {
-              pendingDeleteIndex = entry.clip.storageIndex;
+              const selectedClipIndices = getSelectedLibraryEntries()
+                .filter((selectedEntry) => selectedEntry.type === "clip")
+                .map((selectedEntry) => selectedEntry.clip.storageIndex);
+              pendingDeleteIndices = selectedClipIndices.length > 1 ? selectedClipIndices : null;
+              pendingDeleteIndex = pendingDeleteIndices ? null : entry.clip.storageIndex;
               if (deleteEvent.shiftKey) {
                 confirmDeleteButton.click();
                 return;
               }
-              deleteConfirmationText.textContent = `Delete clip "${entry.name}"?`;
+              deleteConfirmationText.textContent = pendingDeleteIndices
+                ? `Delete ${pendingDeleteIndices.length} selected clips?`
+                : `Delete clip "${entry.name}"?`;
               showDeleteConfirmation();
             } }
           );
@@ -3843,7 +3895,13 @@
       }
 
       function deleteEntryImmediately(entry) {
-        pendingDeleteIndex = entry.type === "clip" ? entry.clip.storageIndex : null;
+        const selectedClipIndices = entry.type === "clip" && selectedLibraryKeys.has(entry.key)
+          ? getSelectedLibraryEntries()
+            .filter((selectedEntry) => selectedEntry.type === "clip")
+            .map((selectedEntry) => selectedEntry.clip.storageIndex)
+          : [];
+        pendingDeleteIndices = selectedClipIndices.length > 1 ? selectedClipIndices : null;
+        pendingDeleteIndex = pendingDeleteIndices ? null : (entry.type === "clip" ? entry.clip.storageIndex : null);
         pendingDeleteFolderId = entry.type === "folder" ? entry.folder.id : null;
         pendingDeleteFootagePath = null;
         confirmDeleteButton.click();
@@ -4342,12 +4400,16 @@
       requestAnimationFrame(() => scrollSelectedFavoriteIntoView());
     }
 
-    function scrollLibraryItemIntoView(resultKey) {
+    function scrollLibraryItemIntoView(resultKey, center = false) {
       const item = Array.from(favoriteList.querySelectorAll(".favorite-result-item"))
         .find((entry) => entry.dataset.resultKey === resultKey);
       if (!item) return;
       const listBounds = favoriteList.getBoundingClientRect();
       const itemBounds = item.getBoundingClientRect();
+      if (center) {
+        favoriteList.scrollTop += itemBounds.top + itemBounds.height / 2 - (listBounds.top + listBounds.height / 2);
+        return;
+      }
       if (itemBounds.top < listBounds.top) {
         favoriteList.scrollTop -= listBounds.top - itemBounds.top;
       } else if (itemBounds.bottom > listBounds.bottom) {
@@ -4375,6 +4437,7 @@
 
     function hideDeleteConfirmation() {
       pendingDeleteIndex = null;
+      pendingDeleteIndices = null;
       pendingDeleteFootagePath = null;
       pendingDeleteFolderId = null;
       deleteConfirmation.hidden = true;
@@ -4933,6 +4996,16 @@
                   parentId: folderEntry.folder.parentId || "",
                   previewRecords: folderEntry.clips
                 };
+              } else if (fields[0] === "B" && fields.length === 2) {
+                const batchEntry = JSON.parse(decodeURIComponent(fields[1]));
+                const batchFolderIds = Array.from(new Set(batchEntry.clips.map((clip) => clip.folderId || "")));
+                entry = {
+                  type: "clips",
+                  name: `${batchEntry.clips.length} selected clips`,
+                  detail: `${batchEntry.clips.length} clip(s)`,
+                  folderId: batchFolderIds.length === 1 ? batchFolderIds[0] : "",
+                  previewRecords: batchEntry.clips
+                };
               } else if (fields[0] === "C" &&
                   [7, 10, 12, 13, 14, 16, 17, 19].includes(fields.length)) {
                 const legacyRecord = fields.length === 7;
@@ -4984,7 +5057,7 @@
             name.textContent = entry.name;
             const time = document.createElement("span");
             time.className = "clip-trash-item-time";
-            time.textContent = entry.type === "folder"
+            time.textContent = entry.type === "folder" || entry.type === "clips"
               ? entry.detail
               : `${entry.folderName ? `${entry.folderName} · ` : ""}${formatTimestamp(entry.sourceIn)}–${formatTimestamp(entry.sourceOut)}`;
             copy.append(name, time);
@@ -4992,12 +5065,16 @@
             const restoreButton = document.createElement("button");
             restoreButton.type = "button";
             restoreButton.className = "secondary";
-            restoreButton.textContent = entry.type === "folder" ? "Restore folder" : "Restore";
+            restoreButton.textContent = entry.type === "folder"
+              ? "Restore folder"
+              : (entry.type === "clips" ? "Restore clips" : "Restore");
             restoreButton.setAttribute("aria-label", `Restore ${entry.type} ${entry.name}`);
             restoreButton.addEventListener("click", () => {
               const folderExists = entry.type === "folder"
                 ? (!entry.parentId || favoriteFolders.some((folder) => folder.id === entry.parentId))
-                : (!entry.folderId || favoriteFolders.some((folder) => folder.id === entry.folderId));
+                : (entry.type === "clips"
+                  ? false
+                  : (!entry.folderId || favoriteFolders.some((folder) => folder.id === entry.folderId)));
               callAE(`restoreClipTrashItem(${index})`, "", (result) => {
                 selectedFolderId = folderExists
                   ? (entry.type === "folder" ? entry.parentId : entry.folderId)
@@ -5050,8 +5127,14 @@
       document.getElementById("cancel-clip-trash-action").focus();
     }
 
-    function refreshFavorites(selectNewest, statusMessage, selectStorageIndex, onComplete, silent, selectClipId, selectOnly = false) {
+    function refreshFavorites(selectNewest, statusMessage, selectStorageIndex, onComplete, silent, selectClipId, selectOnly = false, onError) {
+      favoriteListLoadCount++;
+      clipLibraryLoading.hidden = false;
+      favoriteList.setAttribute("aria-busy", "true");
       callAE("listClipFavorites()", "", (response) => {
+        favoriteListLoadCount = Math.max(0, favoriteListLoadCount - 1);
+        clipLibraryLoading.hidden = favoriteListLoadCount === 0;
+        favoriteList.setAttribute("aria-busy", String(favoriteListLoadCount > 0));
         favoriteRecords = [];
         favoriteList.innerHTML = "";
         if (response === "NO_FAVORITES" || !response) {
@@ -5164,6 +5247,12 @@
           favoriteLoadNoticeTimer = null;
           setResult(`${favoriteRecords.length} clip(s) loaded.`, statusTone);
         }, 2000);
+      }, (message) => {
+        favoriteListLoadCount = Math.max(0, favoriteListLoadCount - 1);
+        clipLibraryLoading.hidden = favoriteListLoadCount === 0;
+        favoriteList.setAttribute("aria-busy", String(favoriteListLoadCount > 0));
+        if (onError) onError(message);
+        else setResult(message, "error");
       });
     }
 
@@ -5350,22 +5439,22 @@
       }
       saveClipDialog.hidden = true;
       callAE(`saveSelectedClipFavorite(${encodedFolderId}, ${saveClipPosition.checked}, ${saveClipScale.checked}, ${saveClipAudio.checked}, ${encodedCustomName})`, "Clip saved.", (response) => {
-        if (response.indexOf("DUPLICATE_CLIP|") === 0) {
+        if (response.indexOf("DUPLICATE_IN_POINT|") === 0) {
           if (isGuidedTutorialSave) {
             guidedTourBusy = false;
             setGuidedTourStep("saveExample");
           }
           const fields = response.split("|");
-          pendingClipReplacementIndex = Number(fields[1]);
-          let existingClipName = "existing clip";
+          let existingClipName = "an existing clip";
           try {
-            existingClipName = decodeURIComponent(fields[2] || existingClipName);
+            existingClipName = decodeURIComponent(fields[1] || existingClipName);
           } catch (error) {
-            existingClipName = fields[2] || existingClipName;
+            existingClipName = fields[1] || existingClipName;
           }
-          replaceClipConfirmationText.textContent = `A clip named "${existingClipName}" with the same footage and timestamps already exists. Replace its saved settings?`;
-          replaceClipConfirmation.hidden = false;
-          cancelClipReplacementButton.focus();
+          pendingDuplicateSaveDecision = { type: "single" };
+          duplicateSaveConfirmationText.textContent = `"${existingClipName}" uses the same footage and source in-point. Save another clip anyway?`;
+          duplicateSaveConfirmation.hidden = false;
+          cancelDuplicateSaveButton.focus();
           return;
         }
         expandedSaveClipFolderIds.clear();
@@ -5383,13 +5472,6 @@
         }
         setResult(message, "error");
       });
-    }
-
-    function cancelPendingClipReplacement() {
-      if (pendingClipReplacementIndex === null) return;
-      pendingClipReplacementIndex = null;
-      replaceClipConfirmation.hidden = true;
-      callAE("cancelClipFavoriteReplacement()", "Replacement canceled.");
     }
 
     function showSaveClipDialog(destinationOnly = false) {
@@ -5446,6 +5528,27 @@
         (response) => {
           quickSaveSelectedClipsButton.disabled = false;
           const fields = String(response || "").split("|");
+          if (fields[0] === "QUICKSAVE_DUPLICATE") {
+            batch.savedCount += Number(fields[1]) || 0;
+            const duplicateFolderName = decodeQuickSaveField(fields[2]);
+            const duplicateFailures = decodeQuickSaveField(fields[3]);
+            const lastSavedClipId = decodeQuickSaveField(fields[4]);
+            const duplicateLayerIndex = Number(fields[5]);
+            const duplicateName = decodeQuickSaveField(fields[6]) || "an existing clip";
+            const duplicateInPoint = Number(fields[7]);
+            if (duplicateFailures) batch.failures.push(duplicateFailures);
+            if (lastSavedClipId) batch.lastSavedClipId = lastSavedClipId;
+            pendingDuplicateSaveDecision = {
+              type: "batch",
+              batch,
+              nextIndex: duplicateLayerIndex + 1,
+              folderName: duplicateFolderName
+            };
+            duplicateSaveConfirmationText.textContent = `"${duplicateName}" uses the same footage and source in-point${Number.isFinite(duplicateInPoint) ? ` (${duplicateInPoint.toFixed(2)}s)` : ""}. Save another clip anyway?`;
+            duplicateSaveConfirmation.hidden = false;
+            cancelDuplicateSaveButton.focus();
+            return;
+          }
           if (fields[0] !== "QUICKSAVE_DONE") {
             pendingQuickSaveBatch = null;
             setResult(response || "Could not save the selected clips.", "error");
@@ -5458,7 +5561,8 @@
           batch.savedCount += Number(fields[1]) || 0;
           const folderName = decodeQuickSaveField(fields[2]);
           const failures = decodeQuickSaveField(fields[3]);
-          const clipId = decodeQuickSaveField(fields[4]);
+          const clipId = decodeQuickSaveField(fields[4]) || batch.lastSavedClipId || "";
+          if (clipId) batch.lastSavedClipId = clipId;
           if (failures) batch.failures.push(failures);
           pendingQuickSaveBatch = null;
           refreshFavorites(!clipId, "", undefined, () => {
@@ -5554,6 +5658,7 @@
         saveAudio: saveDefaultAudio.checked,
         savedCount: 0,
         failures: [],
+        lastSavedClipId: "",
         oneTimeFolder: false
       };
       if (guidedTourActive && guidedTourStep === "saveAction") {
@@ -5580,6 +5685,7 @@
           saveAudio: saveDefaultAudio.checked,
           savedCount: 0,
           failures: [],
+          lastSavedClipId: "",
           oneTimeFolder: true
         };
         runQuickSaveBatch();
@@ -5610,21 +5716,52 @@
       saveClipOptionsDetails.hidden = false;
       clearSelectedClipCapture();
     });
-    confirmClipReplacementButton.addEventListener("click", () => {
-      if (pendingClipReplacementIndex === null) return;
-      const replacementIndex = pendingClipReplacementIndex;
-      pendingClipReplacementIndex = null;
-      replaceClipConfirmation.hidden = true;
-      callAE("confirmClipFavoriteReplacement()", "Clip replaced.", (response) => {
+    function resolvePendingDuplicateSave(saveAnyway) {
+      if (!pendingDuplicateSaveDecision) return;
+      const pending = pendingDuplicateSaveDecision;
+      pendingDuplicateSaveDecision = null;
+      duplicateSaveConfirmation.hidden = true;
+      const action = saveAnyway ? "confirmClipFavoriteDuplicateSave()" : "cancelClipFavoriteDuplicateSave()";
+      callAE(action, "", (response) => {
+        const fields = String(response || "").split("|");
+        if (pending.type === "batch") {
+          if (saveAnyway) {
+            if (fields[0] === "DUPLICATE_SAVED") {
+              pending.batch.savedCount++;
+              pending.batch.lastSavedClipId = decodeQuickSaveField(fields[1]);
+            } else {
+              pending.batch.failures.push(response || "Could not save the duplicate clip.");
+            }
+          }
+          runQuickSaveBatch(pending.nextIndex);
+          return;
+        }
+        if (!saveAnyway) {
+          setResult("Clip save canceled.", "warning");
+          return;
+        }
+        if (fields[0] !== "DUPLICATE_SAVED") {
+          setResult(response || "Could not save the duplicate clip.", "error");
+          return;
+        }
+        const clipId = decodeQuickSaveField(fields[1]);
         expandedSaveClipFolderIds.clear();
-        refreshFavorites(false, response, replacementIndex, undefined, false, undefined, true);
+        refreshFavorites(true, `Saved duplicate clip: ${decodeQuickSaveField(fields[2])}`, undefined, undefined, false, clipId, true);
+      }, (message) => {
+        if (pending.type === "batch") {
+          if (saveAnyway) pending.batch.failures.push(message);
+          runQuickSaveBatch(pending.nextIndex);
+          return;
+        }
+        setResult(message, "error");
       });
-    });
+    }
 
-    cancelClipReplacementButton.addEventListener("click", cancelPendingClipReplacement);
+    confirmDuplicateSaveButton.addEventListener("click", () => resolvePendingDuplicateSave(true));
+    cancelDuplicateSaveButton.addEventListener("click", () => resolvePendingDuplicateSave(false));
 
-    replaceClipConfirmation.addEventListener("click", (event) => {
-      if (event.target === replaceClipConfirmation) cancelPendingClipReplacement();
+    duplicateSaveConfirmation.addEventListener("click", (event) => {
+      if (event.target === duplicateSaveConfirmation) resolvePendingDuplicateSave(false);
     });
 
     saveClipDialog.addEventListener("click", (event) => {
@@ -7011,29 +7148,32 @@
       }
     });
 
+    function setLibraryImportLoading(loading) {
+      libraryImportLoading.hidden = !loading;
+      importLibraryOpenButton.disabled = loading;
+      exportLibraryOpenButton.disabled = loading;
+      libraryDataPageCloseButton.disabled = loading;
+    }
+
+    function finishLibraryImport() {
+      setLibraryImportLoading(false);
+      libraryDataPage.hidden = true;
+    }
+
     function importLibraryData() {
-      callAE("importClipFavorites()", "", handleLibraryImportResponse);
+      setLibraryImportLoading(true);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        callAE("importClipFavorites()", "", handleLibraryImportResponse, (message) => {
+          finishLibraryImport();
+          setResult(message, "error");
+        });
+      }));
     }
 
     function handleLibraryImportResponse(response) {
-        if (response.indexOf("FOLDER_CONFLICT|") === 0) {
-          let folderNames = [];
-          try {
-            folderNames = JSON.parse(decodeURIComponent(response.substring("FOLDER_CONFLICT|".length)));
-          } catch (error) {
-            folderNames = [];
-          }
-          const visibleNames = folderNames.slice(0, 5).join(", ");
-          const remainingCount = folderNames.length - 5;
-          importFolderConflictCopy.textContent = folderNames.length
-            ? `Existing folder(s): ${visibleNames}${remainingCount > 0 ? ` and ${remainingCount} more` : ""}. Replace removes their current contents.`
-            : "An imported folder conflicts with one in the library.";
-          importFolderConflict.hidden = false;
-          importFolderConflictReplaceButton.focus();
-          return;
-        }
         if (response.indexOf("IMPORT_DONE|") !== 0) {
           const canceled = response === "Import canceled." || response === "IMPORT_CANCELED";
+          finishLibraryImport();
           setResult(response || "Clip import complete.", canceled ? "" : "success");
           return;
         }
@@ -7048,7 +7188,8 @@
             importFocus = { folderIds: [], storageIndex: null };
           }
         }
-        const message = `Imported ${added} clip(s). ${unlinked} footage source(s) still need relinking.`;
+        const importFolderName = importFocus.folderName || "the new collection";
+        const message = `Imported ${added} clip(s) to "${importFolderName}". ${unlinked} footage source(s) still need relinking.`;
         refreshFavoriteFolders(() => {
           refreshFavorites(false, message, undefined, () => {
             const importedFolderIds = Array.isArray(importFocus.folderIds) ? importFocus.folderIds : [];
@@ -7063,7 +7204,7 @@
               favoriteResultsMode = "footage";
               syncActiveExplorerTab();
               renderFavoriteClips();
-              requestAnimationFrame(() => scrollLibraryItemIntoView(`folder:${importedFolderIds[0]}`));
+              requestAnimationFrame(() => scrollLibraryItemIntoView(`folder:${importedFolderIds[0]}`, true));
             } else if (importFocus.storageIndex !== null && importFocus.storageIndex !== undefined &&
               Number.isInteger(Number(importFocus.storageIndex))) {
               const importedRecord = favoriteRecords.find((record) =>
@@ -7081,30 +7222,21 @@
                 requestAnimationFrame(() => scrollSelectedFavoriteIntoView());
               }
             }
+            finishLibraryImport();
             if (added > 0) {
-              importSuccessConfirmationText.textContent = `Imported ${added} clip(s).`;
+              importSuccessConfirmationText.textContent = `Imported ${added} clip(s) to "${importFolderName}".`;
               importSuccessConfirmation.hidden = false;
               importSuccessOkButton.focus();
             }
+          }, false, undefined, true, (errorMessage) => {
+            finishLibraryImport();
+            setResult(errorMessage, "error");
           });
+        }, (errorMessage) => {
+          finishLibraryImport();
+          setResult(errorMessage, "error");
         });
     }
-
-    function resolveLibraryFolderConflict(choice) {
-      importFolderConflict.hidden = true;
-      callAE(
-        `resolveClipFavoriteImport(${JSON.stringify(encodeURIComponent(choice))})`,
-        "",
-        handleLibraryImportResponse
-      );
-    }
-
-    importFolderConflictReplaceButton.addEventListener("click", () => resolveLibraryFolderConflict("REPLACE"));
-    importFolderConflictKeepButton.addEventListener("click", () => resolveLibraryFolderConflict("KEEP_BOTH"));
-    importFolderConflictCancelButton.addEventListener("click", () => resolveLibraryFolderConflict("CANCEL"));
-    importFolderConflict.addEventListener("click", (event) => {
-      if (event.target === importFolderConflict) resolveLibraryFolderConflict("CANCEL");
-    });
 
     importSuccessOkButton.addEventListener("click", () => {
       importSuccessConfirmation.hidden = true;
@@ -7474,6 +7606,20 @@
         callAE(`deleteClipFavoriteFootage(${encodedPath})`, "", (response) => {
           refreshFavorites(false, response);
           refreshFavoriteFolders();
+        });
+        return;
+      }
+      if (pendingDeleteIndices && pendingDeleteIndices.length) {
+        const indicesToDelete = pendingDeleteIndices.slice();
+        const folderIdToRestore = selectedFolderId;
+        const encodedIndices = JSON.stringify(encodeURIComponent(JSON.stringify(indicesToDelete)));
+        hideDeleteConfirmation();
+        callAE(`deleteClipFavorites(${encodedIndices})`, "", (response) => {
+          selectedFolderId = folderIdToRestore;
+          selectedLibraryKeys.clear();
+          selectedFavoriteStorageIndex = null;
+          selectedLibraryItemKey = "";
+          refreshFavorites(false, response);
         });
         return;
       }

@@ -1597,6 +1597,70 @@
       background: var(--surface);
     }
 
+    .clip-library-loading {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      min-height: 38px;
+      margin: 0 0 5px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      background: var(--surface);
+      color: #d2d9dc;
+      font-size: 12px;
+    }
+
+    .clip-library-loading[hidden] { display: none; }
+
+    .clip-library-loading-spinner {
+      box-sizing: border-box;
+      width: 16px;
+      height: 16px;
+      flex: 0 0 16px;
+      border: 2px solid rgba(210,217,220,0.24);
+      border-top-color: var(--accent);
+      border-right-color: var(--accent);
+      border-radius: 50%;
+      animation: preview-loading-spin 700ms linear infinite;
+    }
+
+    .library-import-loading {
+      position: fixed;
+      inset: 0;
+      z-index: 1700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      background: rgba(4,9,13,0.68);
+      backdrop-filter: blur(3px);
+    }
+
+    .library-import-loading-card {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 360px;
+      min-height: 64px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: #d2d9dc;
+      font-size: 13px;
+    }
+
+    .library-import-loading[hidden] { display: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .clip-library-loading-spinner { animation: none; }
+    }
+
     .favorite-results.favorite-clip-grid {
       display: grid;
       height: auto;
@@ -1615,7 +1679,7 @@
 
     .favorite-results.favorite-clip-grid.home-dashboard {
       display: block;
-      padding: 7px 7px 190px;
+      padding: 5px 5px 190px;
     }
 
     .home-dashboard-grid {
@@ -1637,16 +1701,6 @@
 
     .favorite-results.favorite-clip-grid.landscape-clip-previews {
       grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-    }
-
-    @media (max-width: 214px) {
-      .favorite-results.favorite-clip-grid,
-      .favorite-results.favorite-clip-grid.landscape-clip-previews,
-      .favorite-footage-folder-grid,
-      .favorite-footage-group-items,
-      .home-dashboard-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
     }
 
     .favorite-result-item {
@@ -1716,9 +1770,9 @@
     .favorite-result:last-child { border-bottom: 0; }
     .favorite-result:hover:not(:disabled) { background: rgba(75,159,225,0.08); }
     .favorite-result[aria-pressed="true"] {
-      border: 2px solid var(--accent);
+      border-color: var(--accent);
       background: rgba(75,159,225,0.12);
-      box-shadow: inset 0 0 0 1px rgba(75,159,225,0.18);
+      box-shadow: inset 0 0 0 1px var(--accent);
     }
 
     .favorite-result-name {
@@ -1809,10 +1863,10 @@
     }
 
     .favorite-clip-grid .favorite-result[aria-pressed="true"] {
-      border: 2px solid var(--accent);
+      border-color: var(--accent);
       outline: none;
       background: rgba(75,159,225,0.12);
-      box-shadow: inset 0 0 0 1px rgba(75,159,225,0.18);
+      box-shadow: inset 0 0 0 1px var(--accent);
     }
 
     .library-favorite-toggle {
@@ -2006,6 +2060,13 @@
     .folder-create-row[hidden],
     .library-context-menu[hidden] { display: none; }
 
+    .library-main-panel {
+      display: flex;
+      min-width: 0;
+      flex: 1 1 auto;
+      flex-direction: column;
+    }
+
     .library-toolbar {
       position: relative;
       display: flex;
@@ -2014,6 +2075,39 @@
       justify-content: space-between;
       gap: 6px;
       margin-bottom: 4px;
+    }
+
+    .library-nav-history {
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .library-nav-button {
+      display: grid;
+      width: 26px;
+      min-width: 26px;
+      height: 24px;
+      min-height: 24px;
+      place-items: center;
+      margin: 0;
+      padding: 0;
+      border-radius: 4px;
+    }
+
+    .library-nav-button svg {
+      display: block;
+      width: 12px;
+      height: 12px;
+    }
+
+    .library-nav-button svg path {
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.7;
     }
 
     .library-sort-control {

@@ -143,11 +143,11 @@ function getActiveComp() {
 
 var FOOTAGE_END_TOLERANCE = 0.002;
 var CLIP_TIMESTAMP_MATCH_TOLERANCE = 0.000001;
-var pendingClipFavoriteReplacement = null;
+var pendingClipFavoriteDuplicateSave = null;
+var activeClipLibraryActionSnapshot = null;
 var lastClipFavoriteSavedId = "";
 var sceneLastReplacedLayer = null;
 var pendingClipFavoriteCapture = null;
-var pendingClipFavoriteImportContents = "";
 var clipToolUndoHistory = [];
 var clipToolRedoHistory = [];
 var CLIP_TOOL_HISTORY_LIMIT = 100;
@@ -396,18 +396,12 @@ function parseClipFootageMetadata(value) {
 }
 
 function normalizeClipFavoriteRecordNames(records, folders) {
+    var folderIds = {};
+    for (var folderIndex = 0; folderIndex < folders.length; folderIndex++) {
+        folderIds["$" + folders[folderIndex].id] = true;
+    }
     for (var i = 0; i < records.length; i++) {
-        if (!records[i].folderId) {
-            continue;
-        }
-        var folderExists = false;
-        for (var folderIndex = 0; folderIndex < folders.length; folderIndex++) {
-            if (folders[folderIndex].id === records[i].folderId) {
-                folderExists = true;
-                break;
-            }
-        }
-        if (!folderExists) {
+        if (!records[i].folderId || !folderIds["$" + records[i].folderId]) {
             continue;
         }
         var legacyNameMatch = (records[i].displayName || "").match(/^(Clip \d+) - .+$/i);
@@ -625,7 +619,7 @@ function getClipRecordsFromTrashEntry(entry) {
     if (entry.type === "clip" && entry.record) {
         return [entry.record];
     }
-    if (entry.type === "folder" && entry.clips) {
+    if ((entry.type === "folder" || entry.type === "clips") && entry.clips) {
         return entry.clips;
     }
     return [];
@@ -680,28 +674,36 @@ function removeOrphanedClipPreviews(entries) {
     return clipPreviewCleanupWarning;
 }
 
-function addClipRecordsToTrash(records) {
+function addClipRecordsToTrash(records, snapshot, groupRecords) {
     if (!records.length) {
         clipPreviewCleanupWarning = "";
         return true;
     }
     clipPreviewCleanupWarning = "";
-    var trashRecords = readClipTrashRecords();
-    var folders = readClipFolderRecords();
-    for (var i = records.length - 1; i >= 0; i--) {
-        var folderName = "";
-        for (var folderIndex = 0; folderIndex < folders.length; folderIndex++) {
-            if (folders[folderIndex].id === records[i].folderId) {
-                folderName = folders[folderIndex].name;
-                break;
-            }
-        }
+    var trashRecords = snapshot ? snapshot.trash.slice(0) : readClipTrashRecords();
+    var folders = snapshot ? snapshot.folders : readClipFolderRecords();
+    if (groupRecords === true && records.length > 1) {
         trashRecords.unshift({
-            type: "clip",
+            type: "clips",
             trashId: getClipTrashObjectId(),
-            record: records[i],
-            folderName: folderName
+            clips: records
         });
+    } else {
+        for (var i = records.length - 1; i >= 0; i--) {
+            var folderName = "";
+            for (var folderIndex = 0; folderIndex < folders.length; folderIndex++) {
+                if (folders[folderIndex].id === records[i].folderId) {
+                    folderName = folders[folderIndex].name;
+                    break;
+                }
+            }
+            trashRecords.unshift({
+                type: "clip",
+                trashId: getClipTrashObjectId(),
+                record: records[i],
+                folderName: folderName
+            });
+        }
     }
     var evictedEntries = [];
     while (trashRecords.length > 10) {
@@ -723,6 +725,8 @@ function listClipTrash() {
     for (var i = 0; i < records.length; i++) {
         if (records[i].type === "folder") {
             lines.push("F\t" + encodeURIComponent(JSON.stringify(records[i])));
+        } else if (records[i].type === "clips" && records[i].clips instanceof Array) {
+            lines.push("B\t" + encodeURIComponent(JSON.stringify(records[i])));
         } else if (records[i].type === "clip" && records[i].record) {
             lines.push("C\t" + encodeURIComponent(records[i].trashId) + "\t" +
                 encodeURIComponent(records[i].folderName || "") + "\t" +
@@ -762,19 +766,6 @@ function isClipFavoriteNameTakenInFolder(records, name, folderId, excludedIndex)
         if (i !== excludedIndex && (records[i].folderId || "") === (folderId || "") &&
             records[i].displayName.toLowerCase() === normalizedName) {
             return true;
-        }
-    }
-    var trashEntries = readClipTrashRecords();
-    for (var trashIndex = 0; trashIndex < trashEntries.length; trashIndex++) {
-        var trashEntry = trashEntries[trashIndex];
-        var trashedClips = trashEntry.type === "folder" ? trashEntry.clips :
-            (trashEntry.record ? [trashEntry.record] : []);
-        for (var clipIndex = 0; clipIndex < trashedClips.length; clipIndex++) {
-            var trashedClip = trashedClips[clipIndex];
-            if ((trashedClip.folderId || "") === (folderId || "") &&
-                trashedClip.displayName.toLowerCase() === normalizedName) {
-                return true;
-            }
         }
     }
     return false;
@@ -1071,7 +1062,8 @@ function renameClipFolder(encodedId, encodedName) {
 
 function deleteClipFolder(encodedId) {
     var id = decodeURIComponent(encodedId || "");
-    var folders = readClipFolderRecords();
+    var actionSnapshot = activeClipLibraryActionSnapshot;
+    var folders = actionSnapshot ? actionSnapshot.folders : readClipFolderRecords();
     var folderName = "";
     var rootFolderRecord = null;
     var keptFolders = [];
@@ -1086,14 +1078,22 @@ function deleteClipFolder(encodedId) {
     if (!folderName) {
         return "ERROR: Folder not found.";
     }
-    var foundChild = true;
-    while (foundChild) {
-        foundChild = false;
-        for (var f = 0; f < folders.length; f++) {
-            if (folders[f].parentId && deletedFolderIds["$" + folders[f].parentId] &&
-                !deletedFolderIds["$" + folders[f].id]) {
-                deletedFolderIds["$" + folders[f].id] = true;
-                foundChild = true;
+    var childFolderIdsByParent = {};
+    for (var childFolderIndex = 0; childFolderIndex < folders.length; childFolderIndex++) {
+        var childFolder = folders[childFolderIndex];
+        var parentKey = "$" + String(childFolder.parentId || "");
+        if (!childFolderIdsByParent[parentKey]) childFolderIdsByParent[parentKey] = [];
+        childFolderIdsByParent[parentKey].push(childFolder.id);
+    }
+    var pendingFolderIds = [id];
+    for (var pendingFolderIndex = 0; pendingFolderIndex < pendingFolderIds.length; pendingFolderIndex++) {
+        var childFolderIds = childFolderIdsByParent["$" + pendingFolderIds[pendingFolderIndex]] || [];
+        for (var childIndex = 0; childIndex < childFolderIds.length; childIndex++) {
+            var childId = childFolderIds[childIndex];
+            var childKey = "$" + childId;
+            if (!deletedFolderIds[childKey]) {
+                deletedFolderIds[childKey] = true;
+                pendingFolderIds.push(childId);
             }
         }
     }
@@ -1108,7 +1108,7 @@ function deleteClipFolder(encodedId) {
             deletedFolders.push(folders[deletedFolderIndex]);
         }
     }
-    var clips = readClipFavoriteRecords();
+    var clips = actionSnapshot ? actionSnapshot.favorites : readClipFavoriteRecords();
     var keptClips = [];
     var deletedClips = [];
     for (var c = 0; c < clips.length; c++) {
@@ -1118,7 +1118,7 @@ function deleteClipFolder(encodedId) {
             deletedClips.push(clips[c]);
         }
     }
-    var trashEntries = readClipTrashRecords();
+    var trashEntries = actionSnapshot ? actionSnapshot.trash.slice(0) : readClipTrashRecords();
     trashEntries.unshift({
         type: "folder",
         trashId: getClipTrashObjectId(),
@@ -1239,10 +1239,12 @@ function removeClipRecordsFromHistory(records) {
     }
     for (var i = 0; i < records.length; i++) {
         var entry = records[i];
-        if (entry.type === "folder") {
+        if (entry.type === "folder" || entry.type === "clips") {
             trashIds["$" + entry.trashId] = true;
-            for (var folderIndex = 0; folderIndex < entry.folders.length; folderIndex++) {
-                folderIds["$" + entry.folders[folderIndex].id] = true;
+            if (entry.type === "folder") {
+                for (var folderIndex = 0; folderIndex < entry.folders.length; folderIndex++) {
+                    folderIds["$" + entry.folders[folderIndex].id] = true;
+                }
             }
             for (var folderClipIndex = 0; folderClipIndex < entry.clips.length; folderClipIndex++) {
                 var folderClip = entry.clips[folderClipIndex];
@@ -1284,7 +1286,7 @@ function removeClipRecordsFromHistory(records) {
                     if (recordKeys[trashClipKey]) {
                         continue;
                     }
-                } else if (trashEntry.type === "folder") {
+                } else if ((trashEntry.type === "folder" || trashEntry.type === "clips") && trashEntry.clips) {
                     var keptFolderClips = [];
                     for (var nestedClipIndex = 0; nestedClipIndex < trashEntry.clips.length; nestedClipIndex++) {
                         var nestedClip = trashEntry.clips[nestedClipIndex];
@@ -1315,18 +1317,50 @@ function removeClipRecordsFromHistory(records) {
 function runClipLibraryAction(encodedCommand) {
     var command = decodeURIComponent(encodedCommand || "");
     var before = getClipLibrarySnapshot();
+    var isFolderDeletion = /^deleteClipFolder\(/.test(command);
+    var isSingleClipDeletion = /^deleteClipFavorite\(/.test(command);
+    var isBulkClipDeletion = /^deleteClipFavorites\(/.test(command);
+    var isLibraryImport = /^importClipFavorites\(/.test(command);
+    var isClipSave = /^saveSelectedClipFavorite\(/.test(command);
+    var isDuplicateClipSave = /^confirmClipFavoriteDuplicateSave\(/.test(command);
+    if (isFolderDeletion || isSingleClipDeletion || isBulkClipDeletion || isLibraryImport || isClipSave || isDuplicateClipSave) {
+        activeClipLibraryActionSnapshot = before;
+    }
     var result;
     try {
         result = eval(command);
     } catch (e) {
         result = "ERROR: " + e.toString();
     }
+    activeClipLibraryActionSnapshot = null;
     result = String(result);
     if (result.indexOf("ERROR:") === 0) {
         var failedActionState = getClipLibrarySnapshot();
         if (!clipLibrarySnapshotsMatch(before, failedActionState) && !restoreClipLibrarySnapshot(before)) {
             return "ERROR: The action failed and its previous library state could not be restored.";
         }
+        return result;
+    }
+    if (isClipSave) {
+        if (result.indexOf("Saved clip:") === 0) {
+            pushClipToolUndoAction({ type: "library", snapshot: before, description: result });
+            createSceneKeeperBackup(true);
+        }
+        return result;
+    }
+    if (isDuplicateClipSave && result.indexOf("DUPLICATE_SAVED|") === 0) {
+        pushClipToolUndoAction({ type: "library", snapshot: before, description: "Saved duplicate clip" });
+        createSceneKeeperBackup(true);
+        return result;
+    }
+    if (isSingleClipDeletion && result.indexOf("Deleted clip:") === 0) {
+        pushClipToolUndoAction({ type: "library", snapshot: before, description: result });
+        createSceneKeeperBackup(true);
+        return result;
+    }
+    if (isFolderDeletion || isBulkClipDeletion || (isLibraryImport && result.indexOf("IMPORT_DONE|") === 0)) {
+        pushClipToolUndoAction({ type: "library", snapshot: before, description: result });
+        createSceneKeeperBackup(true);
         return result;
     }
     var after = getClipLibrarySnapshot();
@@ -1493,27 +1527,47 @@ function listClipFavorites() {
     if (!records.length) {
         return "NO_FAVORITES";
     }
-    var lines = [];
-    for (var i = 0; i < records.length; i++) {
-        if (!(records[i].sourceWidth > 0) || !(records[i].sourceHeight > 0)) {
-            for (var projectIndex = 1; projectIndex <= app.project.numItems; projectIndex++) {
-                var projectItem = app.project.item(projectIndex);
-                if (!(projectItem instanceof FootageItem) || !(projectItem.mainSource instanceof FileSource)) {
-                    continue;
+    var needsProjectDimensions = false;
+    for (var dimensionCheckIndex = 0; dimensionCheckIndex < records.length; dimensionCheckIndex++) {
+        if (!(records[dimensionCheckIndex].sourceWidth > 0) || !(records[dimensionCheckIndex].sourceHeight > 0)) {
+            needsProjectDimensions = true;
+            break;
+        }
+    }
+    var projectDimensionsByPath = {};
+    if (needsProjectDimensions) {
+        for (var projectIndex = 1; projectIndex <= app.project.numItems; projectIndex++) {
+            var projectItem = app.project.item(projectIndex);
+            if (!(projectItem instanceof FootageItem) || !(projectItem.mainSource instanceof FileSource)) continue;
+            try {
+                var projectSourcePath = projectItem.mainSource.file.fsName;
+                var projectSourceKey = "$" + projectSourcePath;
+                if (!projectDimensionsByPath[projectSourceKey]) {
+                    projectDimensionsByPath[projectSourceKey] = {
+                        width: projectItem.width,
+                        height: projectItem.height
+                    };
                 }
-                try {
-                    if (projectItem.mainSource.file.fsName === records[i].sourcePath) {
-                        records[i].sourceWidth = projectItem.width;
-                        records[i].sourceHeight = projectItem.height;
-                        break;
-                    }
-                } catch (e) {
-                    // Continue if this project item does not expose a readable source file.
-                }
+            } catch (e) {
+                // Continue if this project item does not expose a readable source file.
             }
         }
-        var sourceFile = new File(records[i].sourcePath);
-        lines.push(encodeClipFavoriteRecord(records[i]) + "\t" + (sourceFile.exists ? "0" : "1"));
+    }
+    var lines = [];
+    var sourceExistsByPath = {};
+    for (var i = 0; i < records.length; i++) {
+        if (!(records[i].sourceWidth > 0) || !(records[i].sourceHeight > 0)) {
+            var dimensions = projectDimensionsByPath["$" + records[i].sourcePath];
+            if (dimensions) {
+                records[i].sourceWidth = dimensions.width;
+                records[i].sourceHeight = dimensions.height;
+            }
+        }
+        var sourceKey = "$" + records[i].sourcePath;
+        if (sourceExistsByPath[sourceKey] === undefined) {
+            sourceExistsByPath[sourceKey] = new File(records[i].sourcePath).exists;
+        }
+        lines.push(encodeClipFavoriteRecord(records[i]) + "\t" + (sourceExistsByPath[sourceKey] ? "0" : "1"));
     }
     return lines.join("\n");
 }
@@ -1789,7 +1843,7 @@ function removeClipPreviewCacheFolder(folder) {
 function deleteAllClipLibraryData() {
     clipToolUndoHistory = [];
     clipToolRedoHistory = [];
-    pendingClipFavoriteReplacement = null;
+    pendingClipFavoriteDuplicateSave = null;
 
     var dataFolder = getSceneKeeperDataFolder();
     if (!dataFolder) return "ERROR: Could not access SceneKeeper storage. " + sceneKeeperDataFolderError;
@@ -1810,17 +1864,17 @@ function deleteAllClipLibraryData() {
     return "LIBRARY_DELETED";
 }
 
-function findFilesByName(folder, targetName, results) {
+function indexFilesByName(folder, fileIndex) {
     var entries = folder.getFiles();
-    if (!entries) {
-        return;
-    }
+    if (!entries) return;
     for (var i = 0; i < entries.length; i++) {
         var entry = entries[i];
         if (entry instanceof Folder) {
-            findFilesByName(entry, targetName, results);
-        } else if (entry.name.toLowerCase() === targetName.toLowerCase()) {
-            results.push(entry);
+            indexFilesByName(entry, fileIndex);
+        } else {
+            var key = "$" + String(entry.name || "").toLowerCase();
+            if (!fileIndex[key]) fileIndex[key] = [];
+            fileIndex[key].push(entry);
         }
     }
 }
@@ -1859,33 +1913,26 @@ function sameClipFavorite(first, second) {
         first.sourceOut === second.sourceOut;
 }
 
-function importClipFavorites(encodedFolderConflictChoice) {
-    var folderConflictChoice = encodedFolderConflictChoice ? decodeURIComponent(encodedFolderConflictChoice) : "";
-    var importContents = "";
-    if (folderConflictChoice) {
-        if (!pendingClipFavoriteImportContents) {
-            return "ERROR: The pending folder import is no longer available.";
-        }
-        importContents = pendingClipFavoriteImportContents;
-        pendingClipFavoriteImportContents = "";
-        if (folderConflictChoice === "CANCEL") {
-            return "IMPORT_CANCELED";
-        }
-        if (folderConflictChoice !== "REPLACE" && folderConflictChoice !== "KEEP_BOTH") {
-            return "ERROR: Unsupported folder conflict choice.";
-        }
-    } else {
-        var importFile = File.openDialog("Import SceneKeeper clips");
-        if (!importFile) {
-            return "Import canceled.";
-        }
-        importFile.encoding = "UTF-8";
-        if (!importFile.open("r")) {
-            return "ERROR: Could not read the import file.";
-        }
-        importContents = importFile.read();
-        importFile.close();
+function importClipFavorites() {
+    var actionSnapshot = activeClipLibraryActionSnapshot;
+    var importFile = File.openDialog("Import SceneKeeper clips");
+    if (!importFile) {
+        return "Import canceled.";
     }
+    importFile.encoding = "UTF-8";
+    var importFileName = String(importFile.name || "");
+    try {
+        importFileName = decodeURIComponent(importFileName);
+    } catch (decodeError) {}
+    var importFolderNameBase = importFileName.replace(/\.keeper$/i, "").replace(/^\s+|\s+$/g, "");
+    if (!importFolderNameBase) {
+        importFolderNameBase = "Import";
+    }
+    if (!importFile.open("r")) {
+        return "ERROR: Could not read the import file.";
+    }
+    var importContents = importFile.read();
+    importFile.close();
     var importedRecords = decodeClipFavoriteRecords(importContents);
     var importedLibraryData = null;
     var importLines = importContents.split(/[\r\n]+/);
@@ -1904,28 +1951,6 @@ function importClipFavorites(encodedFolderConflictChoice) {
     if (!importedRecords.length && !importedLibraryData) {
         return "ERROR: No valid clips were found in that file.";
     }
-    var conflictingFolderNames = [];
-    if (importedLibraryData && importedLibraryData.folders instanceof Array) {
-        var existingConflictFolders = readClipFolderRecords();
-        for (var conflictImportIndex = 0; conflictImportIndex < importedLibraryData.folders.length; conflictImportIndex++) {
-            var conflictImportFolder = importedLibraryData.folders[conflictImportIndex];
-            if (!conflictImportFolder || conflictImportFolder.parentId) {
-                continue;
-            }
-            for (var conflictExistingIndex = 0; conflictExistingIndex < existingConflictFolders.length; conflictExistingIndex++) {
-                var conflictExistingFolder = existingConflictFolders[conflictExistingIndex];
-                if (conflictExistingFolder.id === conflictImportFolder.id ||
-                    conflictExistingFolder.name.toLowerCase() === String(conflictImportFolder.name).toLowerCase()) {
-                    conflictingFolderNames.push(conflictImportFolder.name);
-                    break;
-                }
-            }
-        }
-        if (conflictingFolderNames.length && !folderConflictChoice) {
-            pendingClipFavoriteImportContents = importContents;
-            return "FOLDER_CONFLICT|" + encodeURIComponent(JSON.stringify(conflictingFolderNames));
-        }
-    }
     var headerFields = importContents.split(/[\r\n]+/)[0].split("\t");
     var importedBlendingMode = "";
     if (headerFields.length > 2 && headerFields[0] === "#SCENEKEEPER_FAVORITES" &&
@@ -1934,215 +1959,187 @@ function importClipFavorites(encodedFolderConflictChoice) {
     }
 
     var missingPaths = [];
+    var missingPathKeys = {};
+    var importedRecordsBySourcePath = {};
     for (var i = 0; i < importedRecords.length; i++) {
         var record = importedRecords[i];
+        var sourcePathKey = "$" + String(record.sourcePath || "");
+        if (!importedRecordsBySourcePath[sourcePathKey]) importedRecordsBySourcePath[sourcePathKey] = [];
+        importedRecordsBySourcePath[sourcePathKey].push(record);
+        if (missingPathKeys[sourcePathKey]) continue;
+        missingPathKeys[sourcePathKey] = true;
         if (new File(record.sourcePath).exists) {
             continue;
         }
-        var known = false;
-        for (var j = 0; j < missingPaths.length; j++) {
-            if (missingPaths[j] === record.sourcePath) {
-                known = true;
-                break;
-            }
-        }
-        if (!known) {
-            missingPaths.push(record.sourcePath);
-        }
+        missingPaths.push(record.sourcePath);
     }
 
     if (missingPaths.length) {
         var searchFolder = Folder.selectDialog("Choose a folder to search for missing footage by filename. Cancel to relink later.");
         if (searchFolder) {
+            var fileIndex = {};
+            indexFilesByName(searchFolder, fileIndex);
             for (var p = 0; p < missingPaths.length; p++) {
                 var oldPath = missingPaths[p];
                 var expectedName = getPortableFileName(oldPath);
-                var candidates = [];
-                findFilesByName(searchFolder, expectedName, candidates);
+                var candidates = fileIndex["$" + expectedName.toLowerCase()] || [];
                 if (candidates.length === 1) {
-                    replaceFavoriteSourcePath(importedRecords, oldPath, candidates[0].fsName, candidates[0].name);
+                    var matchingRecords = importedRecordsBySourcePath["$" + String(oldPath || "")] || [];
+                    for (var matchingRecordIndex = 0; matchingRecordIndex < matchingRecords.length; matchingRecordIndex++) {
+                        matchingRecords[matchingRecordIndex].sourcePath = candidates[0].fsName;
+                        matchingRecords[matchingRecordIndex].sourceName = candidates[0].name;
+                    }
                 }
             }
         }
     }
 
-    var knownFolders = readClipFolderRecords();
+    var knownFolders = actionSnapshot ? actionSnapshot.folders.slice(0) : readClipFolderRecords();
+    var existingTrashRecords = actionSnapshot ? actionSnapshot.trash.slice(0) : readClipTrashRecords();
+    var knownFolderIds = {};
+    var knownFolderSourcePaths = {};
+    var rootFolderNames = {};
+    for (var knownFolderIndex = 0; knownFolderIndex < knownFolders.length; knownFolderIndex++) {
+        var knownFolder = knownFolders[knownFolderIndex];
+        var knownFolderKey = "$" + knownFolder.id;
+        knownFolderIds[knownFolderKey] = true;
+        knownFolderSourcePaths[knownFolderKey] = knownFolder.sourcePath || "";
+        if (!(knownFolder.parentId || "")) rootFolderNames["$" + knownFolder.name.toLowerCase()] = true;
+    }
     var importedFolderIds = {};
+    var pendingImportedFolderIds = {};
     var foldersToAdd = [];
-    var replacementRootIds = {};
-    var replacedFolderIds = {};
-    var replacementRootCount = 0;
-    var forceDuplicateImportedFolders = folderConflictChoice === "KEEP_BOTH" && conflictingFolderNames.length > 0;
-    if (importedLibraryData && importedLibraryData.folders instanceof Array) {
-        if (folderConflictChoice === "REPLACE") {
-            var claimedReplacementIds = {};
-            for (var replacementIndex = 0; replacementIndex < importedLibraryData.folders.length; replacementIndex++) {
-                var replacementFolder = importedLibraryData.folders[replacementIndex];
-                if (!replacementFolder || replacementFolder.parentId) {
-                    continue;
-                }
-                for (var existingReplacementIndex = 0; existingReplacementIndex < knownFolders.length; existingReplacementIndex++) {
-                    var existingReplacement = knownFolders[existingReplacementIndex];
-                    if (claimedReplacementIds["$" + existingReplacement.id]) {
-                        continue;
-                    }
-                    if (existingReplacement.id === replacementFolder.id ||
-                        existingReplacement.name.toLowerCase() === String(replacementFolder.name).toLowerCase()) {
-                        replacementRootIds["$" + replacementFolder.id] = existingReplacement.id;
-                        claimedReplacementIds["$" + existingReplacement.id] = true;
-                        replacedFolderIds["$" + existingReplacement.id] = true;
-                        replacementRootCount++;
-                        break;
-                    }
-                }
-            }
-            var foundReplacedFolder = true;
-            while (foundReplacedFolder) {
-                foundReplacedFolder = false;
-                for (var replacedIndex = 0; replacedIndex < knownFolders.length; replacedIndex++) {
-                    var possibleDescendant = knownFolders[replacedIndex];
-                    if (possibleDescendant.parentId && replacedFolderIds["$" + possibleDescendant.parentId] &&
-                        !replacedFolderIds["$" + possibleDescendant.id]) {
-                        replacedFolderIds["$" + possibleDescendant.id] = true;
-                        foundReplacedFolder = true;
-                    }
-                }
-            }
-            knownFolders = knownFolders.filter(function (folder) {
-                return !replacedFolderIds["$" + folder.id] || claimedReplacementIds["$" + folder.id];
-            });
+    var importedFolderRecords = importedLibraryData && importedLibraryData.folders instanceof Array
+        ? importedLibraryData.folders
+        : [];
+    var importFolderSuffix = String(new Date().getTime());
+    var importFolderName = importFolderNameBase;
+    var importFolderNumber = 2;
+    while (rootFolderNames["$" + importFolderName.toLowerCase()]) {
+        importFolderName = importFolderNameBase + " (" + importFolderNumber++ + ")";
+    }
+    var importRootId = "import-" + importFolderSuffix + "-root";
+    var rootIdSuffix = 1;
+    while (knownFolderIds["$" + importRootId]) {
+        importRootId = "import-" + importFolderSuffix + "-root-" + rootIdSuffix++;
+    }
+    knownFolderIds["$" + importRootId] = true;
+    knownFolderSourcePaths["$" + importRootId] = "";
+    rootFolderNames["$" + importFolderName.toLowerCase()] = true;
+    knownFolders.push({
+        id: importRootId,
+        name: importFolderName,
+        sourcePath: "",
+        parentId: "",
+        sortOrder: null
+    });
+    for (var importedFolderIndex = 0; importedFolderIndex < importedFolderRecords.length; importedFolderIndex++) {
+        var importedFolder = importedFolderRecords[importedFolderIndex];
+        if (!importedFolder || !importedFolder.id || !importedFolder.name) {
+            continue;
         }
-        var importFolderSuffix = String(new Date().getTime());
-        for (var importedFolderIndex = 0; importedFolderIndex < importedLibraryData.folders.length; importedFolderIndex++) {
-            var importedFolder = importedLibraryData.folders[importedFolderIndex];
-            if (!importedFolder || !importedFolder.id || !importedFolder.name) {
-                continue;
-            }
-            var matchingFolder = null;
-            var replacementId = replacementRootIds["$" + importedFolder.id];
-            if (replacementId) {
-                for (var replacementMatchIndex = 0; replacementMatchIndex < knownFolders.length; replacementMatchIndex++) {
-                    if (knownFolders[replacementMatchIndex].id === replacementId) {
-                        matchingFolder = knownFolders[replacementMatchIndex];
-                        break;
-                    }
-                }
-            } else if (!forceDuplicateImportedFolders) {
-                for (var knownFolderIndex = 0; knownFolderIndex < knownFolders.length; knownFolderIndex++) {
-                    if (knownFolders[knownFolderIndex].id === importedFolder.id &&
-                        knownFolders[knownFolderIndex].name === importedFolder.name &&
-                        knownFolders[knownFolderIndex].sourcePath === (importedFolder.sourcePath || "")) {
-                        matchingFolder = knownFolders[knownFolderIndex];
-                        break;
-                    }
-                }
-            }
-            var mappedFolderId = matchingFolder ? matchingFolder.id : importedFolder.id;
-            if (matchingFolder && replacementId) {
-                matchingFolder.name = importedFolder.name;
-                matchingFolder.sourcePath = importedFolder.sourcePath || "";
-            }
-            if (!matchingFolder) {
-                var collisionIndex = 0;
-                if (forceDuplicateImportedFolders) {
-                    mappedFolderId = importedFolder.id + "-import-" + importFolderSuffix + "-" + collisionIndex++;
-                }
-                var idInUse = true;
-                while (idInUse) {
-                    idInUse = false;
-                    for (var collisionCheck = 0; collisionCheck < knownFolders.length; collisionCheck++) {
-                        if (knownFolders[collisionCheck].id === mappedFolderId) {
-                            idInUse = true;
-                            mappedFolderId = importedFolder.id + "-import-" + importFolderSuffix + "-" + collisionIndex++;
-                            break;
-                        }
-                    }
-                }
-                foldersToAdd.push({
-                    id: mappedFolderId,
-                    name: importedFolder.name,
-                    sourcePath: importedFolder.sourcePath || "",
-                    parentId: importedFolder.parentId || ""
-                });
-            }
-            importedFolderIds["$" + importedFolder.id] = mappedFolderId;
+        var mappedFolderId = "import-" + importFolderSuffix + "-folder-" + importedFolderIndex;
+        var folderIdSuffix = 1;
+        while (knownFolderIds["$" + mappedFolderId] || pendingImportedFolderIds["$" + mappedFolderId]) {
+            mappedFolderId = "import-" + importFolderSuffix + "-folder-" + importedFolderIndex + "-" + folderIdSuffix++;
         }
-        for (var newFolderIndex = 0; newFolderIndex < foldersToAdd.length; newFolderIndex++) {
-            var newFolder = foldersToAdd[newFolderIndex];
-            if (newFolder.parentId && importedFolderIds["$" + newFolder.parentId]) {
-                newFolder.parentId = importedFolderIds["$" + newFolder.parentId];
-            } else if (newFolder.parentId) {
-                var parentExists = false;
-                for (var parentIndex = 0; parentIndex < knownFolders.length; parentIndex++) {
-                    if (knownFolders[parentIndex].id === newFolder.parentId) {
-                        parentExists = true;
-                        break;
-                    }
-                }
-                if (!parentExists) {
-                    newFolder.parentId = "";
-                }
-            }
-            knownFolders.push(newFolder);
-        }
-        if ((foldersToAdd.length || replacementRootCount) && !writeClipFolderRecords(knownFolders)) {
-            return "ERROR: Could not restore exported library folders.";
-        }
-        for (var remapRecordIndex = 0; remapRecordIndex < importedRecords.length; remapRecordIndex++) {
-            var originalFolderId = importedRecords[remapRecordIndex].folderId || "";
-            if (originalFolderId && importedFolderIds["$" + originalFolderId]) {
-                importedRecords[remapRecordIndex].folderId = importedFolderIds["$" + originalFolderId];
-            }
-        }
+        pendingImportedFolderIds["$" + mappedFolderId] = true;
+        importedFolderIds["$" + importedFolder.id] = mappedFolderId;
+        foldersToAdd.push({
+            id: mappedFolderId,
+            name: importedFolder.name,
+            sourcePath: importedFolder.sourcePath || "",
+            parentId: importedFolder.parentId || ""
+        });
+    }
+    for (var newFolderIndex = 0; newFolderIndex < foldersToAdd.length; newFolderIndex++) {
+        var newFolder = foldersToAdd[newFolderIndex];
+        newFolder.parentId = importedFolderIds["$" + newFolder.parentId] || importRootId;
+        knownFolders.push(newFolder);
+        knownFolderIds["$" + newFolder.id] = true;
+        knownFolderSourcePaths["$" + newFolder.id] = newFolder.sourcePath || "";
+    }
+    for (var remapRecordIndex = 0; remapRecordIndex < importedRecords.length; remapRecordIndex++) {
+        var originalFolderId = importedRecords[remapRecordIndex].folderId || "";
+        importedRecords[remapRecordIndex].folderId = importedFolderIds["$" + originalFolderId] || importRootId;
+    }
+    if (!writeClipFolderRecords(knownFolders)) {
+        return "ERROR: Could not restore exported library folders.";
     }
     for (var importedIndex = 0; importedIndex < importedRecords.length; importedIndex++) {
         var importedRecord = importedRecords[importedIndex];
-        if (!importedRecord.folderId) {
-            continue;
-        }
-        var folderExists = false;
-        for (var folderIndex = 0; folderIndex < knownFolders.length; folderIndex++) {
-            if (knownFolders[folderIndex].id === importedRecord.folderId &&
-                (importedLibraryData || knownFolders[folderIndex].sourcePath === importedRecord.sourcePath)) {
-                folderExists = true;
-                break;
-            }
-        }
-        if (!folderExists) {
+        var importedFolderKey = "$" + (importedRecord.folderId || "");
+        if (importedRecord.folderId && (!knownFolderIds[importedFolderKey] ||
+            (!importedLibraryData && importedRecord.folderId !== importRootId &&
+            knownFolderSourcePaths[importedFolderKey] !== importedRecord.sourcePath))) {
             importedRecord.folderId = "";
         }
     }
     normalizeClipFavoriteRecordNames(importedRecords, knownFolders);
     ensureClipRecordIds(importedRecords);
 
-    var existingRecords = readClipFavoriteRecords();
-    var replacedPreviewEntries = [];
-    if (replacementRootCount) {
-        existingRecords = existingRecords.filter(function (record) {
-            if (!replacedFolderIds["$" + (record.folderId || "")]) {
-                return true;
-            }
-            replacedPreviewEntries.push({ type: "clip", record: record });
-            return false;
-        });
+    var existingRecords = actionSnapshot ? actionSnapshot.favorites.slice(0) : readClipFavoriteRecords();
+    function getImportClipIdentityKey(record) {
+        if (typeof record.sourceIn !== "number" || !isFinite(record.sourceIn) ||
+            typeof record.sourceOut !== "number" || !isFinite(record.sourceOut)) {
+            return "";
+        }
+        return "$" + JSON.stringify([
+            record.sourcePath,
+            record.displayName,
+            record.folderId || "",
+            record.sourceIn,
+            record.sourceOut
+        ]);
+    }
+    function getImportClipNameKey(folderId, displayName) {
+        return "$" + JSON.stringify([
+            folderId || "",
+            String(displayName || "").toLowerCase()
+        ]);
+    }
+    var knownClipIdentities = {};
+    var clipNamesInUse = {};
+    for (var existingClipIndex = 0; existingClipIndex < existingRecords.length; existingClipIndex++) {
+        var existingClip = existingRecords[existingClipIndex];
+        var existingIdentityKey = getImportClipIdentityKey(existingClip);
+        if (existingIdentityKey) knownClipIdentities[existingIdentityKey] = true;
+        clipNamesInUse[getImportClipNameKey(existingClip.folderId, existingClip.displayName)] = true;
+    }
+    for (var trashEntryIndex = 0; trashEntryIndex < existingTrashRecords.length; trashEntryIndex++) {
+        var trashedClips = getClipRecordsFromTrashEntry(existingTrashRecords[trashEntryIndex]);
+        for (var trashedClipIndex = 0; trashedClipIndex < trashedClips.length; trashedClipIndex++) {
+            var trashedClip = trashedClips[trashedClipIndex];
+            clipNamesInUse[getImportClipNameKey(trashedClip.folderId, trashedClip.displayName)] = true;
+        }
     }
     var added = 0;
     var importedClipIndices = [];
     for (var r = 0; r < importedRecords.length; r++) {
-        var duplicate = false;
-        for (var e = 0; e < existingRecords.length; e++) {
-            if (sameClipFavorite(existingRecords[e], importedRecords[r])) {
-                duplicate = true;
-                break;
+        var importedIdentityKey = getImportClipIdentityKey(importedRecords[r]);
+        var duplicate = importedIdentityKey ? Boolean(knownClipIdentities[importedIdentityKey]) : false;
+        if (!importedIdentityKey) {
+            for (var e = 0; e < existingRecords.length; e++) {
+                if (sameClipFavorite(existingRecords[e], importedRecords[r])) {
+                    duplicate = true;
+                    break;
+                }
             }
         }
         if (!duplicate) {
             importedRecords[r].clipId = getClipRecordId();
-            importedRecords[r].displayName = makeUniqueClipFavoriteNameInFolder(
-                existingRecords,
-                importedRecords[r].displayName,
-                importedRecords[r].folderId
-            );
+            var requestedClipName = importedRecords[r].displayName;
+            var uniqueClipName = requestedClipName;
+            var clipNameSuffix = 2;
+            var importedNameKey = getImportClipNameKey(importedRecords[r].folderId, uniqueClipName);
+            while (clipNamesInUse[importedNameKey]) {
+                uniqueClipName = requestedClipName + " (" + clipNameSuffix++ + ")";
+                importedNameKey = getImportClipNameKey(importedRecords[r].folderId, uniqueClipName);
+            }
+            importedRecords[r].displayName = uniqueClipName;
+            clipNamesInUse[importedNameKey] = true;
+            var finalIdentityKey = getImportClipIdentityKey(importedRecords[r]);
+            if (finalIdentityKey) knownClipIdentities[finalIdentityKey] = true;
             importedClipIndices.push(existingRecords.length);
             existingRecords.push(importedRecords[r]);
             added++;
@@ -2151,11 +2148,7 @@ function importClipFavorites(encodedFolderConflictChoice) {
     if (!writeClipFavoriteRecords(existingRecords)) {
         return "ERROR: Could not merge imported clips into the library.";
     }
-    if (replacedPreviewEntries.length) {
-        removeOrphanedClipPreviews(replacedPreviewEntries);
-    }
     if (importedLibraryData && importedLibraryData.trash instanceof Array) {
-        var existingTrashRecords = readClipTrashRecords();
         var knownTrashIds = {};
         for (var knownTrashIndex = 0; knownTrashIndex < existingTrashRecords.length; knownTrashIndex++) {
             knownTrashIds["$" + existingTrashRecords[knownTrashIndex].trashId] = true;
@@ -2176,41 +2169,20 @@ function importClipFavorites(encodedFolderConflictChoice) {
         }
     }
     var unlinked = [];
+    var checkedSourcePaths = {};
     for (var u = 0; u < existingRecords.length; u++) {
-        if (!new File(existingRecords[u].sourcePath).exists) {
-            var alreadyCounted = false;
-            for (var m = 0; m < unlinked.length; m++) {
-                if (unlinked[m] === existingRecords[u].sourcePath) {
-                    alreadyCounted = true;
-                    break;
-                }
-            }
-            if (!alreadyCounted) {
-                unlinked.push(existingRecords[u].sourcePath);
-            }
-        }
-    }
-    var importedRootFolderIds = [];
-    if (importedLibraryData && importedLibraryData.folders instanceof Array) {
-        for (var rootFolderIndex = 0; rootFolderIndex < importedLibraryData.folders.length; rootFolderIndex++) {
-            var rootFolder = importedLibraryData.folders[rootFolderIndex];
-            if (rootFolder && !rootFolder.parentId && importedFolderIds["$" + rootFolder.id]) {
-                importedRootFolderIds.push(importedFolderIds["$" + rootFolder.id]);
-            }
-        }
+        var existingSourcePath = existingRecords[u].sourcePath;
+        var checkedPathKey = "$" + JSON.stringify(existingSourcePath);
+        if (checkedSourcePaths[checkedPathKey]) continue;
+        checkedSourcePaths[checkedPathKey] = true;
+        if (!new File(existingSourcePath).exists) unlinked.push(existingSourcePath);
     }
     var importFocus = {
-        folderIds: importedRootFolderIds,
+        folderIds: [importRootId],
+        folderName: importFolderName,
         storageIndex: importedClipIndices.length ? importedClipIndices[0] : null
     };
     return "IMPORT_DONE|" + added + "|" + unlinked.length + "|" + encodeURIComponent(JSON.stringify(importFocus));
-}
-
-function resolveClipFavoriteImport(encodedFolderConflictChoice) {
-    if (!pendingClipFavoriteImportContents) {
-        return "ERROR: There is no pending folder import to resolve.";
-    }
-    return importClipFavorites(encodedFolderConflictChoice);
 }
 
 function relinkClipFavoriteFootage(index) {
@@ -2412,7 +2384,9 @@ function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, save
     if (!folderId) {
         return "ERROR: Home can only contain folders. Choose a collection folder before saving a clip.";
     }
-    var folders = readClipFolderRecords();
+    var folders = activeClipLibraryActionSnapshot
+        ? activeClipLibraryActionSnapshot.folders
+        : readClipFolderRecords();
     var folderExists = false;
     for (var folderIndex = 0; folderIndex < folders.length; folderIndex++) {
         if (folders[folderIndex].id === folderId) {
@@ -2492,7 +2466,9 @@ function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, save
             sourceIn.toFixed(4) + "–" + sourceOut.toFixed(4) + "s; footage " +
             sourceDuration.toFixed(4) + "s).";
     }
-    var records = readClipFavoriteRecords();
+    var records = activeClipLibraryActionSnapshot
+        ? activeClipLibraryActionSnapshot.favorites.slice(0)
+        : readClipFavoriteRecords();
     var displayName = decodeURIComponent(encodedCustomName || "").replace(/^\s+|\s+$/g, "");
     var hasCustomName = displayName !== "";
     if (displayName.length > 120) {
@@ -2529,24 +2505,27 @@ function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, save
         }
     }
 
-    pendingClipFavoriteReplacement = null;
     var matchingDuplicateIndex = -1;
+    var sameInPointTolerance = Math.max(
+        isNaN(sourceFrameDuration) || sourceFrameDuration <= 0 ? 0 : sourceFrameDuration / 2,
+        CLIP_TIMESTAMP_MATCH_TOLERANCE
+    );
+    var normalizedSourcePath = String(newRecord.sourcePath || "").replace(/\\/g, "/").toLowerCase();
     for (var duplicateIndex = 0; duplicateIndex < records.length; duplicateIndex++) {
         var existingRecord = records[duplicateIndex];
-        if (existingRecord.sourcePath === newRecord.sourcePath &&
-            Math.abs(existingRecord.sourceIn - newRecord.sourceIn) <= CLIP_TIMESTAMP_MATCH_TOLERANCE &&
-            Math.abs(existingRecord.sourceOut - newRecord.sourceOut) <= CLIP_TIMESTAMP_MATCH_TOLERANCE) {
+        if (String(existingRecord.sourcePath || "").replace(/\\/g, "/").toLowerCase() === normalizedSourcePath &&
+            Math.abs(existingRecord.sourceIn - newRecord.sourceIn) <= sameInPointTolerance) {
             matchingDuplicateIndex = duplicateIndex;
             break;
         }
     }
-    if (hasCustomName && isClipFavoriteNameTakenInFolder(records, displayName, folderId, matchingDuplicateIndex)) {
+    if (hasCustomName && isClipFavoriteNameTakenInFolder(records, displayName, folderId, -1)) {
         return "ERROR: A clip with this name already exists in this folder.";
     }
     if (matchingDuplicateIndex >= 0) {
-        pendingClipFavoriteReplacement = { index: matchingDuplicateIndex, record: newRecord };
+        pendingClipFavoriteDuplicateSave = { record: newRecord };
         pendingClipFavoriteCapture = null;
-        return "DUPLICATE_CLIP|" + matchingDuplicateIndex + "|" + encodeURIComponent(records[matchingDuplicateIndex].displayName);
+        return "DUPLICATE_IN_POINT|" + encodeURIComponent(records[matchingDuplicateIndex].displayName) + "|" + sourceIn.toFixed(4);
     }
 
     records.push(newRecord);
@@ -2557,6 +2536,32 @@ function saveSelectedClipFavorite(encodedFolderId, savePosition, saveScale, save
     lastClipFavoriteSavedId = newRecord.clipId;
     pendingClipFavoriteCapture = null;
     return "Saved clip: " + displayName + " from " + layer.source.name + " (" + sourceIn.toFixed(2) + "–" + sourceOut.toFixed(2) + "s).";
+}
+
+function confirmClipFavoriteDuplicateSave() {
+    if (!pendingClipFavoriteDuplicateSave || !pendingClipFavoriteDuplicateSave.record) {
+        return "ERROR: No duplicate clip save is pending.";
+    }
+    var record = pendingClipFavoriteDuplicateSave.record;
+    pendingClipFavoriteDuplicateSave = null;
+    var records = activeClipLibraryActionSnapshot
+        ? activeClipLibraryActionSnapshot.favorites.slice(0)
+        : readClipFavoriteRecords();
+    if (isClipFavoriteNameTakenInFolder(records, record.displayName, record.folderId, -1)) {
+        return "ERROR: A clip with this name already exists in this folder.";
+    }
+    records.push(record);
+    if (!writeClipFavoriteRecords(records)) {
+        return "ERROR: Could not save the clip. " + (sceneKeeperDataFolderError || "Check that the SceneKeeper data folder is writable.");
+    }
+    lastClipFavoriteSavedId = record.clipId;
+    return "DUPLICATE_SAVED|" + encodeURIComponent(record.clipId) + "|" + encodeURIComponent(record.displayName);
+}
+
+function cancelClipFavoriteDuplicateSave() {
+    pendingClipFavoriteDuplicateSave = null;
+    pendingClipFavoriteCapture = null;
+    return "DUPLICATE_CANCELED";
 }
 
 function storeClipQuickSaveShortcutSettings(encodedFolderId, savePosition, saveScale, saveAudioState) {
@@ -2638,7 +2643,13 @@ function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, fo
         try {
             result = saveSelectedClipFavorite(
                 encodeURIComponent(folderId), savePosition, saveScale, saveAudio, "");
-            if (result.indexOf("DUPLICATE_CLIP|") === 0) result = confirmClipFavoriteReplacement();
+            if (result.indexOf("DUPLICATE_IN_POINT|") === 0) {
+                var duplicateFields = result.split("|");
+                pendingClipFavoriteCapture = null;
+                return "QUICKSAVE_DUPLICATE|" + savedCount + "|" + encodeURIComponent(folderName) + "|" +
+                    encodeURIComponent(failures.join(" | ")) + "|" + encodeURIComponent(lastSavedClipId) + "|" +
+                    layerIndex + "|" + duplicateFields[1] + "|" + duplicateFields[2];
+            }
             if (result.indexOf("Saved clip:") === 0 || result.indexOf("Replaced clip:") === 0) {
                 savedCount++;
                 lastSavedClipId = lastClipFavoriteSavedId;
@@ -2649,7 +2660,6 @@ function quickSaveSelectedClipsFromShortcut(skipRevisionUpdate, startAtIndex, fo
             failures.push(layer.name + ": " + error.toString());
         }
         pendingClipFavoriteCapture = null;
-        pendingClipFavoriteReplacement = null;
     }
     if (savedCount === 0 && firstLayerIndex === 0) {
         return "ERROR: No selected clips were saved. " + failures.join(" | ");
@@ -2679,38 +2689,6 @@ function saveSelectedClipsToFolderOnce(encodedFolderId, savePosition, saveScale,
     return quickSaveSelectedClipsFromShortcut(
         true, startAtIndex,
         folderId, savePosition === true, saveScale === true, saveAudioState === true);
-}
-
-function confirmClipFavoriteReplacement() {
-    if (!pendingClipFavoriteReplacement) {
-        return "ERROR: No clip replacement is pending.";
-    }
-    var pending = pendingClipFavoriteReplacement;
-    pendingClipFavoriteReplacement = null;
-    var records = readClipFavoriteRecords();
-    if (pending.index < 0 || pending.index >= records.length) {
-        return "ERROR: The existing clip could not be found.";
-    }
-    var existingRecord = records[pending.index];
-    if (existingRecord.sourcePath !== pending.record.sourcePath ||
-        Math.abs(existingRecord.sourceIn - pending.record.sourceIn) > CLIP_TIMESTAMP_MATCH_TOLERANCE ||
-        Math.abs(existingRecord.sourceOut - pending.record.sourceOut) > CLIP_TIMESTAMP_MATCH_TOLERANCE) {
-        return "ERROR: The existing clip changed before it could be replaced.";
-    }
-
-    pending.record.displayName = existingRecord.displayName;
-    pending.record.folderId = existingRecord.folderId || "";
-    records[pending.index] = pending.record;
-    if (!writeClipFavoriteRecords(records)) {
-        return "ERROR: Could not replace the existing clip.";
-    }
-    lastClipFavoriteSavedId = pending.record.clipId;
-    return "Replaced clip: " + existingRecord.displayName;
-}
-
-function cancelClipFavoriteReplacement() {
-    pendingClipFavoriteReplacement = null;
-    return "Replacement canceled. The existing clip was not changed.";
 }
 
 function renameClipFavorite(index, encodedName) {
@@ -2881,13 +2859,14 @@ function updateClipFavorite(index, encodedSourceIn, encodedSourceOut, encodedPos
 }
 
 function deleteClipFavorite(index) {
-    var records = readClipFavoriteRecords();
+    var snapshot = activeClipLibraryActionSnapshot;
+    var records = snapshot ? snapshot.favorites.slice(0) : readClipFavoriteRecords();
     index = parseInt(index, 10);
     if (isNaN(index) || index < 0 || index >= records.length) {
         return "ERROR: Select a clip first.";
     }
     var name = records[index].displayName;
-    if (!addClipRecordsToTrash([records[index]])) {
+    if (!addClipRecordsToTrash([records[index]], snapshot)) {
         return "ERROR: Could not move the clip to the trash.";
     }
     records.splice(index, 1);
@@ -2895,6 +2874,42 @@ function deleteClipFavorite(index) {
         return "ERROR: Could not delete the clip.";
     }
     return "Deleted clip: " + name + "." + clipPreviewCleanupWarning;
+}
+
+function deleteClipFavorites(encodedIndices) {
+    var indices;
+    try {
+        indices = JSON.parse(decodeURIComponent(encodedIndices || ""));
+    } catch (e) {
+        return "ERROR: The selected clips are invalid.";
+    }
+    if (!(indices instanceof Array) || !indices.length) {
+        return "ERROR: Select one or more clips first.";
+    }
+    var snapshot = activeClipLibraryActionSnapshot;
+    var records = snapshot ? snapshot.favorites.slice(0) : readClipFavoriteRecords();
+    var selectedIndices = {};
+    for (var selectedIndex = 0; selectedIndex < indices.length; selectedIndex++) {
+        var index = parseInt(indices[selectedIndex], 10);
+        if (isNaN(index) || index < 0 || index >= records.length) {
+            return "ERROR: One or more selected clips could not be found.";
+        }
+        selectedIndices["$" + index] = true;
+    }
+    var deletedRecords = [];
+    var keptRecords = [];
+    for (var recordIndex = 0; recordIndex < records.length; recordIndex++) {
+        if (selectedIndices["$" + recordIndex]) deletedRecords.push(records[recordIndex]);
+        else keptRecords.push(records[recordIndex]);
+    }
+    if (!deletedRecords.length) {
+        return "ERROR: No selected clips were found.";
+    }
+    if (!addClipRecordsToTrash(deletedRecords, snapshot, true) || !writeClipFavoriteRecords(keptRecords)) {
+        return "ERROR: Could not move the selected clips to the trash.";
+    }
+    return "Deleted " + deletedRecords.length + " selected " +
+        (deletedRecords.length === 1 ? "clip." : "clips.") + clipPreviewCleanupWarning;
 }
 
 function deleteClipFavoriteFootage(encodedSourcePath) {
@@ -2973,14 +2988,31 @@ function restoreClipTrashItem(index) {
         }
         for (var restoredClipIndex = 0; restoredClipIndex < entry.clips.length; restoredClipIndex++) {
             var restoredClip = entry.clips[restoredClipIndex];
-            if (!/\(restored\)$/i.test(restoredClip.displayName)) restoredClip.displayName += " (restored)";
             restoredClip.folderId = restoredFolderIds["$" + restoredClip.folderId] || "";
+            restoredClip.displayName = makeUniqueClipFavoriteNameInFolder(
+                records,
+                restoredClip.displayName,
+                restoredClip.folderId
+            );
             records.push(restoredClip);
         }
         restoredName = entry.folder.name;
+    } else if (entry.type === "clips") {
+        var existingRestoreFolderIds = {};
+        for (var restoreFolderIndex = 0; restoreFolderIndex < folders.length; restoreFolderIndex++) {
+            existingRestoreFolderIds["$" + folders[restoreFolderIndex].id] = true;
+        }
+        for (var batchRestoreIndex = 0; batchRestoreIndex < entry.clips.length; batchRestoreIndex++) {
+            var batchRecord = entry.clips[batchRestoreIndex];
+            if (batchRecord.folderId && !existingRestoreFolderIds["$" + batchRecord.folderId]) {
+                batchRecord.folderId = "";
+            }
+            batchRecord.displayName = makeUniqueClipFavoriteNameInFolder(records, batchRecord.displayName, batchRecord.folderId);
+            records.push(batchRecord);
+        }
+        restoredName = entry.clips.length + (entry.clips.length === 1 ? " clip" : " clips");
     } else {
         var record = entry.record;
-        if (!/\(restored\)$/i.test(record.displayName)) record.displayName += " (restored)";
         var folderExists = !record.folderId;
         for (var clipFolderIndex = 0; clipFolderIndex < folders.length; clipFolderIndex++) {
             if (folders[clipFolderIndex].id === record.folderId) {
@@ -2991,6 +3023,7 @@ function restoreClipTrashItem(index) {
         if (!folderExists) {
             record.folderId = "";
         }
+        record.displayName = makeUniqueClipFavoriteNameInFolder(records, record.displayName, record.folderId);
         records.push(record);
         restoredName = record.displayName;
     }
@@ -3001,9 +3034,9 @@ function restoreClipTrashItem(index) {
         !writeClipTrashRecords(trashRecords)) {
         return "ERROR: Could not restore the deleted item.";
     }
-    return entry.type === "folder"
-        ? "Restored folder and its contents: " + restoredName
-        : "Restored clip: " + restoredName;
+    if (entry.type === "folder") return "Restored folder and its contents: " + restoredName;
+    if (entry.type === "clips") return "Restored " + restoredName + ".";
+    return "Restored clip: " + restoredName;
 }
 
 function permanentlyDeleteClipTrashItem(index) {
@@ -3013,7 +3046,9 @@ function permanentlyDeleteClipTrashItem(index) {
         return "ERROR: Select an item in the trash first.";
     }
     var deletedEntry = records[index];
-    var name = deletedEntry.type === "folder" ? deletedEntry.folder.name : deletedEntry.record.displayName;
+    var name = deletedEntry.type === "folder"
+        ? deletedEntry.folder.name
+        : (deletedEntry.type === "clips" ? deletedEntry.clips.length + " clips" : deletedEntry.record.displayName);
     records.splice(index, 1);
     if (!writeClipTrashRecords(records)) {
         return "ERROR: Could not permanently delete the item.";

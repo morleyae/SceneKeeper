@@ -4,16 +4,18 @@ SceneKeeper is an Adobe After Effects panel for saving, organizing, previewing, 
 
 ## Download
 
-Download the latest installer ZIP from the [SceneKeeper Releases page](https://github.com/morleyae/SceneKeeper/releases/latest). Choose the ZIP named `SceneKeeper-vX.Y.Z.zip` and extract it before installing.
+Download the latest installer ZIP from the [SceneKeeper Releases page](https://github.com/morleyae/SceneKeeper/releases/latest). Choose `SceneKeeper-vX.Y.Z-macOS.zip` or `SceneKeeper-vX.Y.Z-Windows.zip` for your operating system, then extract it before installing.
 
 ## Install
 
 Close After Effects before installing.
 
 1. Open the extracted `SceneKeeper` folder.
-2. On **macOS**, double-click `install-macos.command`. If macOS blocks it, right-click the file, choose **Open**, and confirm.
-3. On **Windows**, double-click `install-windows.bat` and approve the installation.
-4. Start After Effects and open **Window > Extensions (Legacy) > SceneKeeper**.
+2. On **macOS**, double-click `install-macos.command`. If macOS blocks it on first launch, right-click the file, choose **Open**, and confirm.
+3. On **Windows**, double-click `install-windows.bat`.
+4. Wait for the installer to finish, then start or restart After Effects and open **Window > Extensions (Legacy) > SceneKeeper**.
+
+The installers run without keyboard input or administrator access. The macOS Terminal window may close automatically when installation finishes.
 
 Keep the installer files inside the extracted `SceneKeeper` folder while installing. If the panel does not appear, restart After Effects and check **Window > Extensions (Legacy)** again.
 

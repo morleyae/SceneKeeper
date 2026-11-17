@@ -19,25 +19,23 @@ INCLUDED_PATHS = (
     "jsx",
     "scripts",
     "index.html",
-    "install-macos.command",
-    "install-windows.bat",
     "README.md",
     "README_EN.md",
 )
+PLATFORM_INSTALLERS = {
+    "macOS": "install-macos.command",
+    "Windows": "install-windows.bat",
+}
 
 
-def main() -> int:
-    if len(sys.argv) != 2 or not re.fullmatch(r"v\d+\.\d+\.\d+", sys.argv[1]):
-        print("Usage: package_release.py vMAJOR.MINOR.PATCH", file=sys.stderr)
-        return 2
-
-    tag = sys.argv[1]
+def build_archive(tag: str, platform: str, installer: str) -> Path:
     version = tag[1:]
     dist = ROOT / "dist"
-    staging = dist / "SceneKeeper"
-    archive = dist / f"SceneKeeper-{tag}.zip"
-    if staging.exists():
-        shutil.rmtree(staging)
+    staging_root = dist / f"staging-{platform}"
+    staging = staging_root / "SceneKeeper"
+    archive = dist / f"SceneKeeper-{tag}-{platform}.zip"
+    if staging_root.exists():
+        shutil.rmtree(staging_root)
     staging.mkdir(parents=True)
 
     for item in INCLUDED_PATHS:
@@ -50,6 +48,8 @@ def main() -> int:
         else:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+
+    shutil.copy2(ROOT / installer, staging / installer)
 
     manifest_path = staging / "CSXS" / "manifest.xml"
     manifest = manifest_path.read_text(encoding="utf-8")
@@ -75,6 +75,17 @@ def main() -> int:
             if path.is_file():
                 bundle.write(path, Path("SceneKeeper") / path.relative_to(staging))
     print(f"Created {archive}")
+    return archive
+
+
+def main() -> int:
+    if len(sys.argv) != 2 or not re.fullmatch(r"v\d+\.\d+\.\d+", sys.argv[1]):
+        print("Usage: package_release.py vMAJOR.MINOR.PATCH", file=sys.stderr)
+        return 2
+
+    tag = sys.argv[1]
+    for platform, installer in PLATFORM_INSTALLERS.items():
+        build_archive(tag, platform, installer)
     return 0
 
 

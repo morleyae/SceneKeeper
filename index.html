@@ -307,13 +307,19 @@
         </button>
         <button id="import-library-open" class="secondary library-data-option" type="button">
           <strong>Import Library</strong>
-          <small>Choose a SceneKeeper backup file to add its clips and folders.</small>
+          <small>Import clips and folders into a new Home collection.</small>
         </button>
       </div>
     </div>
   </div>
 
   <div class="section favorites-section">
+    <div id="library-import-loading" class="library-import-loading" role="status" aria-live="polite" hidden>
+      <div class="library-import-loading-card">
+        <span class="clip-library-loading-spinner" aria-hidden="true"></span>
+        <span>Importing library. Please wait while clips load…</span>
+      </div>
+    </div>
     <div class="section-heading">
       <h1>SceneKeeper</h1>
       <div class="section-heading-actions">
@@ -341,6 +347,14 @@
       <button id="new-library-tab" class="library-tab-new" type="button" aria-label="Open new explorer tab" data-tooltip="New tab">+</button>
     </div>
     <div class="library-toolbar">
+      <div class="library-nav-history" aria-label="Folder navigation history">
+        <button id="library-nav-back" class="secondary compact library-nav-button" type="button" aria-label="Go to previous folder" title="Previous folder" disabled>
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M9.5 4.5 6 8l3.5 3.5"/></svg>
+        </button>
+        <button id="library-nav-forward" class="secondary compact library-nav-button" type="button" aria-label="Go to next folder" title="Next folder" disabled>
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6.5 4.5 10 8l-3.5 3.5"/></svg>
+        </button>
+      </div>
       <nav id="library-breadcrumb" class="library-breadcrumb" aria-label="Library location"></nav>
       <div class="library-sort-control" id="library-sort-control">
         <button id="clip-sort-menu-toggle" class="clip-sort-menu-toggle secondary compact" type="button" aria-label="Sort clips" title="Sort clips" aria-haspopup="menu" aria-expanded="false">
@@ -366,6 +380,10 @@
           <button id="confirm-folder-create-button" type="button">Create</button>
         </div>
       </div>
+    </div>
+    <div id="clip-library-loading" class="clip-library-loading" role="status" aria-live="polite" hidden>
+      <span class="clip-library-loading-spinner" aria-hidden="true"></span>
+      <span>Please wait while clips load…</span>
     </div>
     <div id="favorite-list" class="favorite-results" role="list" aria-label="Collections and saved clips" aria-live="polite"></div>
     <div class="favorite-preview" id="favorite-preview" hidden>
@@ -552,28 +570,17 @@
         </div>
       </div>
     </div>
-    <div id="replace-clip-confirmation" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="replace-clip-confirmation-text" hidden>
+    <div id="duplicate-save-confirmation" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="duplicate-save-confirmation-text" hidden>
       <div class="confirm-box-content">
-        <p id="replace-clip-confirmation-text" class="confirm-copy">A clip with the same footage and timestamps already exists. Replace its saved settings?</p>
+        <p id="duplicate-save-confirmation-text" class="confirm-copy">A clip from this footage with the same source in-point is already saved. Save another clip anyway?</p>
         <div class="confirm-actions">
-          <button id="cancel-clip-replacement-button" class="secondary" type="button">Cancel</button>
-          <button id="confirm-clip-replacement-button" type="button">Replace Clip</button>
+          <button id="cancel-duplicate-save-button" class="secondary" type="button">Cancel Save</button>
+          <button id="confirm-duplicate-save-button" type="button">Save Anyway</button>
         </div>
       </div>
     </div>
     <div class="favorite-tools-row">
       <!-- Export and Import moved to Settings modal -->
-    </div>
-    <div id="import-folder-conflict" class="confirm-box" role="alertdialog" aria-modal="true" aria-labelledby="import-folder-conflict-title" hidden>
-      <div class="confirm-box-content import-folder-conflict-content">
-        <p id="import-folder-conflict-title" class="confirm-copy">A folder with this name already exists.</p>
-        <p id="import-folder-conflict-copy" class="confirm-copy"></p>
-        <div class="confirm-actions import-folder-conflict-actions">
-          <button id="import-folder-conflict-replace" class="danger" type="button">Replace</button>
-          <button id="import-folder-conflict-keep" class="secondary" type="button">Keep Both</button>
-          <button id="import-folder-conflict-cancel" class="secondary" type="button">Cancel Import</button>
-        </div>
-      </div>
     </div>
     <div id="delete-confirmation" class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="delete-confirmation-text" hidden>
       <div class="confirm-box-content">
