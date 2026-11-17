@@ -206,6 +206,20 @@
     xhr.send();
   }
 
+  function getPlatformName() {
+    return /win/i.test(navigator.platform || navigator.userAgent) ? "Windows" : "macOS";
+  }
+
+  function getPlatformArchiveName(version) {
+    return `SceneKeeper-${version}-${getPlatformName()}.zip`;
+  }
+
+  function findUpdateAsset(release) {
+    const assets = release.assets || [];
+    const platformAsset = assets.find((item) => item.name === getPlatformArchiveName(release.tag_name));
+    return platformAsset || assets.find((item) => item.name === `SceneKeeper-${release.tag_name}.zip`) || null;
+  }
+
   function scheduleInstall(archivePath, version, callback) {
     const cep = window.__adobe_cep__;
     const processApi = window.cep && window.cep.process;
@@ -216,7 +230,7 @@
 
     const runningExtensionPath = normalizePath(cep.getSystemPath("extension"));
     const userData = normalizePath(cep.getSystemPath("userData"));
-    const isWindows = /win/i.test(navigator.platform || navigator.userAgent);
+    const isWindows = getPlatformName() === "Windows";
     const installTarget = isWindows
       ? `${userData}/Adobe/CEP/extensions/SceneKeeper`
       : runningExtensionPath;
@@ -450,7 +464,7 @@
     if (!version || compareVersions(config.currentVersion, version) >= 0) return;
     const cep = window.__adobe_cep__;
     const userData = cep ? normalizePath(cep.getSystemPath("userData")) : "";
-    const archivePath = `${userData}/SceneKeeper/updates/SceneKeeper-${version}.zip`;
+    const archivePath = `${userData}/SceneKeeper/updates/${getPlatformArchiveName(version)}`;
     const fs = window.cep && window.cep.fs;
     let archiveRetryVersion = "";
     try { archiveRetryVersion = window.localStorage.getItem(ARCHIVE_RETRY_KEY) || ""; } catch (error) {}
@@ -690,7 +704,7 @@
         return;
       }
       showUpdateProblem(`SceneKeeper ${release.tag_name} was found and is downloading. The panel will tell you when it is installed and ready to use.`);
-      const asset = (release.assets || []).find((item) => item.name === `SceneKeeper-${release.tag_name}.zip`);
+      const asset = findUpdateAsset(release);
       if (!asset || !asset.browser_download_url) {
         showUpdateProblem(`SceneKeeper ${release.tag_name} is available, but its download package could not be found. Please contact support.`);
         clearLastCheckTime();

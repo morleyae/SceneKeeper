@@ -28,7 +28,7 @@ jobs:
           cat <<'EOF' > /tmp/scenekeeper-install-guide-template.md
           ## Download and install
 
-          1. Under **Assets**, download the ZIP for your operating system: `SceneKeeper-{VERSION}-macOS.zip` or `SceneKeeper-{VERSION}-Windows.zip`. Do not download the “Source code” files.
+          1. Under **Assets**, download the ZIP for your operating system: `SceneKeeper-{VERSION}-macOS.zip` or `SceneKeeper-{VERSION}-Windows.zip`. Do not download the “Automatic updater compatibility” asset or the “Source code” files.
           2. Extract the ZIP and open the `SceneKeeper` folder.
           3. Run the included installer. On macOS, right-click `install-macos.command` and choose **Open** if prompted. On Windows, run `install-windows.bat`.
           4. Start or restart After Effects and open **Window > Extensions (Legacy) > SceneKeeper**.
@@ -45,5 +45,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             "dist/SceneKeeper-$GITHUB_REF_NAME-macOS.zip" \
             "dist/SceneKeeper-$GITHUB_REF_NAME-Windows.zip" \
+            "dist/SceneKeeper-$GITHUB_REF_NAME.zip#Automatic updater compatibility - do not download" \
             --title "SceneKeeper $GITHUB_REF_NAME" \
             --notes-file /tmp/scenekeeper-release-notes.md

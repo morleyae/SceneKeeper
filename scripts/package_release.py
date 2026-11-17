@@ -28,12 +28,13 @@ PLATFORM_INSTALLERS = {
 }
 
 
-def build_archive(tag: str, platform: str, installer: str) -> Path:
+def build_archive(tag: str, platform: str, installer: str = "") -> Path:
     version = tag[1:]
     dist = ROOT / "dist"
     staging_root = dist / f"staging-{platform}"
     staging = staging_root / "SceneKeeper"
-    archive = dist / f"SceneKeeper-{tag}-{platform}.zip"
+    archive_name = f"SceneKeeper-{tag}-{platform}.zip" if installer else f"SceneKeeper-{tag}.zip"
+    archive = dist / archive_name
     if staging_root.exists():
         shutil.rmtree(staging_root)
     staging.mkdir(parents=True)
@@ -49,7 +50,8 @@ def build_archive(tag: str, platform: str, installer: str) -> Path:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
 
-    shutil.copy2(ROOT / installer, staging / installer)
+    if installer:
+        shutil.copy2(ROOT / installer, staging / installer)
 
     manifest_path = staging / "CSXS" / "manifest.xml"
     manifest = manifest_path.read_text(encoding="utf-8")
@@ -86,6 +88,7 @@ def main() -> int:
     tag = sys.argv[1]
     for platform, installer in PLATFORM_INSTALLERS.items():
         build_archive(tag, platform, installer)
+    build_archive(tag, "update")
     return 0
 
 
