@@ -1,0 +1,76 @@
+.license-gate[hidden] { display: none; }
+.license-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(12, 12, 12, 0.96);
+}
+.license-gate-card {
+  width: 100%;
+  max-width: 360px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.42);
+}
+.license-gate-card h2 { margin: 0 0 8px; font-size: 16px; }
+.license-gate-card p { margin: 0 0 12px; color: var(--muted); }
+.license-gate-card label { display: block; margin-bottom: 4px; font-weight: 700; }
+.license-gate-card input {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+.license-gate-status {
+  min-height: 17px;
+  margin: 8px 0 !important;
+  font-size: 10px;
+  white-space: pre-line;
+}
+.license-support-note { margin: 7px 0 0 !important; font-size: 10px; }
+.license-support-note strong { color: var(--text); }
+.license-gate-status.is-error { color: #d89595; }
+.license-gate-actions,
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 8px;
+}
+.license-gate-actions button,
+.license-gate-card .confirm-actions button {
+  width: auto;
+  min-width: 90px;
+  margin-top: 0;
+}
+.settings-license-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.settings-license-row div { display: flex; flex-direction: column; }
+.settings-license-row small { color: var(--muted); font-size: 10px; }
+.settings-license-row button {
+  width: auto;
+  min-width: 70px;
+  margin: 0;
+  background: var(--raised);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.settings-license-row button:hover { border-color: var(--accent); filter: brightness(1.08); }

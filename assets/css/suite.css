@@ -1,0 +1,292 @@
+/* Shared KeeperSuite UI foundation. Package CSS may add feature-specific visuals only. */
+:root {
+  --suite-font: "Avenir Next", "Segoe UI", sans-serif;
+  --suite-text-xs: 9px;
+  --suite-text-sm: 11px;
+  --suite-text-md: 12px;
+  --suite-text-lg: 14px;
+  --suite-radius: 6px;
+  --suite-radius-small: 4px;
+  --suite-border: rgba(150, 162, 178, 0.28);
+  --suite-muted: #98a4b4;
+  --suite-accent: #83a9d6;
+  --suite-accent-strong: #a0c2e8;
+  --suite-success: #82b39a;
+  --suite-warning: #d3b178;
+  --suite-danger: #d77d76;
+  --suite-primary-bg: #83a9d6;
+  --suite-primary-ink: #101820;
+  --suite-secondary-bg: #303a49;
+  --suite-secondary-text: #edf2f8;
+  --suite-dialog-bg: #252525;
+  --suite-dialog-border: #414141;
+  --suite-footer-height: 18px;
+  --suite-notice-z: 9000;
+}
+
+:root,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--suite-font);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+input,
+select,
+textarea,
+a {
+  letter-spacing: 0;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--suite-accent);
+  outline-offset: 2px;
+}
+
+.panel-credit {
+  position: fixed;
+  z-index: 100;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  box-sizing: border-box;
+  min-height: var(--suite-footer-height);
+  height: var(--suite-footer-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 1px 9px;
+  border-top: 1px solid var(--suite-border);
+  background: var(--background, var(--bg, #1b1b1b));
+  color: var(--suite-muted);
+  font-size: var(--suite-text-xs);
+}
+
+.panel-credit-link,
+.panel-credit a {
+  color: var(--suite-muted);
+  text-decoration: none;
+}
+
+.panel-credit-link:hover,
+.panel-credit-link:focus-visible,
+.panel-credit a:hover,
+.panel-credit a:focus-visible {
+  color: var(--suite-accent-strong);
+  text-decoration: underline;
+}
+
+.license-gate,
+.license-gate-card,
+.confirm-box,
+.confirm-box-content,
+.settings-modal,
+.help-modal-content,
+[class$="-update-notice"],
+[class$="-update-card"] {
+  letter-spacing: 0;
+}
+
+[class$="-update-notice"] {
+  z-index: var(--suite-notice-z);
+  font-family: var(--suite-font);
+  font-size: var(--suite-text-md);
+}
+
+[class$="-update-card"] {
+  border-radius: var(--suite-radius);
+}
+
+.settings-license-row,
+.settings-switch-row.license-settings-row,
+.confirm-box-content,
+.license-gate-card {
+  border-radius: var(--suite-radius);
+}
+
+.confirm-actions button,
+.dialog-actions button,
+.toolkeeper-update-actions button,
+.scene-keeper-update-actions button,
+.keeper-info-actions button {
+  min-height: 34px;
+  border: 1px solid var(--suite-dialog-border);
+  border-radius: var(--suite-radius);
+  font-family: var(--suite-font);
+  font-size: var(--suite-text-md);
+  font-weight: 700;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.confirm-actions button,
+.dialog-actions button,
+.toolkeeper-update-actions button,
+.scene-keeper-update-actions button {
+  background: var(--suite-primary-bg);
+  color: var(--suite-primary-ink);
+  border-color: var(--suite-primary-bg);
+}
+
+.confirm-actions button.secondary,
+.dialog-actions button.secondary,
+.toolkeeper-update-actions button.secondary,
+.scene-keeper-update-actions button.secondary {
+  background: var(--suite-secondary-bg);
+  color: var(--suite-secondary-text);
+  border-color: var(--suite-dialog-border);
+}
+
+.confirm-actions button.danger,
+.dialog-actions button.danger,
+.toolkeeper-update-actions button.danger,
+.scene-keeper-update-actions button.danger {
+  background: rgba(215, 125, 118, 0.16);
+  color: var(--suite-danger);
+  border-color: var(--suite-danger);
+}
+
+.toolkeeper-update-card,
+.scene-keeper-update-card {
+  width: min(100%, 460px);
+  max-height: 100%;
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--suite-dialog-border);
+  border-top: 3px solid var(--suite-primary-bg);
+  border-radius: var(--suite-radius);
+  background: var(--suite-dialog-bg);
+  color: var(--suite-secondary-text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.toolkeeper-update-card h2,
+.scene-keeper-update-card h2 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.toolkeeper-update-card p,
+.scene-keeper-update-card p {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.toolkeeper-update-help,
+.scene-keeper-update-help {
+  color: var(--suite-muted);
+  font-size: var(--suite-text-sm);
+}
+
+.toolkeeper-update-help a,
+.scene-keeper-update-help a {
+  color: var(--suite-accent-strong);
+  text-decoration: underline;
+}
+
+.toolkeeper-update-actions,
+.scene-keeper-update-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.toolkeeper-update-actions button,
+.scene-keeper-update-actions button {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 10px;
+  white-space: nowrap;
+}
+
+.keeper-info-modal {
+  z-index: 1700;
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.78);
+}
+
+.keeper-info-modal[hidden] {
+  display: none;
+}
+
+.keeper-info-card {
+  width: min(100%, 460px);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  box-sizing: border-box;
+  position: relative;
+  padding: 18px;
+  border: 1px solid var(--suite-dialog-border);
+  border-top: 3px solid var(--suite-primary-bg);
+  border-radius: var(--suite-radius);
+  background: var(--suite-dialog-bg);
+  color: var(--suite-secondary-text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.keeper-info-card h2 {
+  margin: 0 42px 12px 0;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.keeper-info-copy {
+  color: var(--suite-muted);
+  font-size: var(--suite-text-md);
+  line-height: 1.5;
+}
+
+.keeper-info-copy p {
+  margin: 0 0 12px;
+}
+
+.keeper-info-actions {
+  margin-top: 12px;
+}
+
+.keeper-info-actions button {
+  min-width: 96px;
+}
+
+.keeper-success,
+.is-success,
+.status-success {
+  color: var(--suite-success);
+}
+
+.keeper-warning,
+.is-warning,
+.status-warning {
+  color: var(--suite-warning);
+}
+
+.keeper-error,
+.is-error,
+.status-error,
+.danger {
+  color: var(--suite-danger);
+}

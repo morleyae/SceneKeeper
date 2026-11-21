@@ -67,7 +67,8 @@
       "Clip cards show the source in-point only, and clips ending at the footage boundary are no longer rejected because of frame rounding.",
       "Update notices now use a full-screen view with a manual download link, support guidance, and an option to continue without updating."
     ],
-    "1.0.60": ["SceneKeeper now checks for updates when the panel opens, not in the background while you work."]
+    "1.0.60": ["SceneKeeper now checks for updates when the panel opens, not in the background while you work."],
+    "1.0.63": ["License activation now retries through macOS system curl when the embedded CEP HTTPS connection cannot reach the license server."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
