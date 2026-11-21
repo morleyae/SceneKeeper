@@ -69,7 +69,8 @@
     ],
     "1.0.60": ["SceneKeeper now checks for updates when the panel opens, not in the background while you work."],
     "1.0.63": ["License activation now retries through macOS system curl when the embedded CEP HTTPS connection cannot reach the license server."],
-    "1.0.64": ["Fixed Continue without update so it immediately closes the update overlay and lets you keep working."]
+    "1.0.64": ["Fixed Continue without update so it immediately closes the update overlay and lets you keep working."],
+    "1.0.65": ["SceneKeeper no longer shows a blocking update popup when the update server cannot be reached at startup."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -633,7 +634,7 @@
       checkInFlight = false;
       if (continueWithoutUpdateThisSession) return;
       if (releaseError) {
-        showUpdateProblem("Could not check for SceneKeeper updates. Try again the next time you open SceneKeeper.");
+        clearNotice();
         return;
       }
       if (!release || release.draft || release.prerelease || compareVersions(release.tag_name, config.currentVersion) <= 0) {
