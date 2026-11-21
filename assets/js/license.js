@@ -219,76 +219,71 @@
     if (status === 409) return "This license key is already activated on another device. Message morley.ae on Discord to reset it.";
     if (status === 429) return "The license service is rate limiting requests. Wait a few minutes and retry.";
     if (status >= 500) return "The license service is temporarily unavailable. Retry in a few minutes.";
-    if (status === 408 || status === 0) return "Could not reach the license server. Check your internet connection and retry.";
+    if (status === 408) return "The license server timed out. Check your internet connection and retry.";
+    if (status === 0 && message && message !== "Could not reach the license server." && message !== "The license server did not respond in time.") return "Could not reach the license server: " + message;
+    if (status === 0) return "Could not reach the license server. Check your internet connection and retry.";
     return message;
   }
 
   function macNativeCurlRequest(path, body) {
     return new Promise(function (resolve, reject) {
-      var paths = cepPaths();
-      var processApi = window.cep && window.cep.process;
-      var fs = paths && paths.fs;
-      if (!/Mac/i.test(navigator.platform || "") || !paths || !processApi || typeof processApi.createProcess !== "function" || !fs) {
-        reject(Object.assign(new Error("Could not reach the license server."), { status: 0 }));
+      if (!/Mac/i.test(navigator.platform || "")) {
+        reject(Object.assign(new Error("Native macOS curl fallback is unavailable on this platform."), { status: 0 }));
         return;
       }
-      var root = paths.userData + "/ToolKeeper/license-network";
-      try {
-        var stat = fs.stat(root);
-        var exists = stat && stat.err === 0 && stat.data && typeof stat.data.isDirectory === "function" && stat.data.isDirectory();
-        if (!exists) {
-          var made = fs.makedir(root);
-          if (!made || made.err !== 0) throw new Error("Could not prepare the native license request.");
-        }
-      } catch (error) {
-        reject(Object.assign(new Error("Could not prepare the native license request."), { status: 0 }));
+      var cepNode = window.cep_node || (typeof cep_node !== "undefined" ? cep_node : null);
+      if (!cepNode || typeof cepNode.require !== "function") {
+        reject(Object.assign(new Error("CEP Node runtime is unavailable for the native license request."), { status: 0 }));
         return;
       }
-      var token = String(Date.now()) + Math.floor(Math.random() * 1000000);
-      var payloadPath = root + "/payload-" + token + ".json";
-      var bodyPath = root + "/response-" + token + ".json";
-      var headersPath = root + "/headers-" + token + ".txt";
-      var payload = JSON.stringify(body);
-      var payloadWrite = fs.writeFile(payloadPath, payload);
-      if (!payloadWrite || payloadWrite.err !== 0) {
-        reject(Object.assign(new Error("Could not prepare the native license request."), { status: 0 }));
+      var childProcess;
+      try { childProcess = cepNode.require("child_process"); }
+      catch (error) {
+        reject(Object.assign(new Error("Could not load the native license process: " + error.message), { status: 0 }));
         return;
       }
-      var launched;
-      try {
-        launched = processApi.createProcess(
-          "/usr/bin/curl",
-          "-sS",
-          "--max-time", "20",
-          "-H", "Content-Type: application/json",
-          "-H", "Accept: application/json",
-          "-X", "POST",
-          "--data-binary", "@" + payloadPath,
-          "-D", headersPath,
-          "-o", bodyPath,
-          apiBaseUrl + path
-        );
-      } catch (error) {
-        launched = null;
-      }
-      if (!launched || launched.err !== 0) {
-        reject(Object.assign(new Error("Could not start the native license request."), { status: 0 }));
+      var settled = false;
+      var stdout = "";
+      var stderr = "";
+      var args = [
+        "-sS", "--max-time", "20",
+        "-H", "Content-Type: application/json",
+        "-H", "Accept: application/json",
+        "-X", "POST",
+        "--data-binary", JSON.stringify(body),
+        "-w", "\n__TK_STATUS__:%{http_code}",
+        apiBaseUrl + path
+      ];
+      var child;
+      try { child = childProcess.spawn("/usr/bin/curl", args, { stdio: ["ignore", "pipe", "pipe"] }); }
+      catch (error) {
+        reject(Object.assign(new Error("Could not start native curl: " + error.message), { status: 0 }));
         return;
       }
-      var started = Date.now();
-      var timer = window.setInterval(function () {
-        var headers = fs.readFile(headersPath);
-        var bodyResult = fs.readFile(bodyPath);
-        if (!headers || headers.err !== 0 || !headers.data) {
-          if (Date.now() - started < 22000) return;
-          window.clearInterval(timer);
-          reject(Object.assign(new Error("The license server did not respond in time."), { status: 408 }));
+      if (!child || !child.stdout || !child.stderr) {
+        reject(Object.assign(new Error("Native curl could not capture a license response."), { status: 0 }));
+        return;
+      }
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", function (chunk) { stdout += String(chunk || ""); });
+      child.stderr.on("data", function (chunk) { stderr += String(chunk || ""); });
+      child.on("error", function (error) {
+        if (settled) return;
+        settled = true;
+        reject(Object.assign(new Error("Native curl failed: " + error.message), { status: 0 }));
+      });
+      child.on("close", function (exitCode) {
+        if (settled) return;
+        settled = true;
+        var match = stdout.match(/\n__TK_STATUS__(?::)(\d{3})\s*$/);
+        var status = match ? Number(match[1]) : 0;
+        var responseText = match ? stdout.replace(/\n__TK_STATUS__:\d{3}\s*$/, "") : stdout;
+        if (exitCode !== 0) {
+          var detail = String(stderr || "").trim().replace(/\s+/g, " ").slice(0, 300);
+          reject(Object.assign(new Error(detail ? "Native curl failed: " + detail : "Native curl exited with code " + exitCode), { status: status || 0 }));
           return;
         }
-        window.clearInterval(timer);
-        var statusMatch = String(headers.data).match(/HTTP\/[^\s]+\s+(\d{3})/i);
-        var status = statusMatch ? Number(statusMatch[1]) : 0;
-        var responseText = bodyResult && bodyResult.err === 0 && bodyResult.data ? String(bodyResult.data) : "{}";
         var response;
         try { response = JSON.parse(responseText); }
         catch (error) {
@@ -303,7 +298,7 @@
           requestError.status = status || 0;
           reject(requestError);
         }
-      }, 250);
+      });
     });
   }
 

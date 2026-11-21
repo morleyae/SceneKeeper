@@ -1,1 +1,1 @@
-window.SceneKeeperUpdateConfig = {"currentVersion": "1.0.65", "repository": "morleyae/SceneKeeper"};
+window.SceneKeeperUpdateConfig = {"currentVersion": "1.0.66", "repository": "morleyae/SceneKeeper"};

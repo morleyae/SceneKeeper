@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.endlessaudios.ceptest" ExtensionBundleVersion="1.0.65">
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.endlessaudios.ceptest" ExtensionBundleVersion="1.0.66">
   <ExtensionList>
-    <Extension Id="com.endlessaudios.ceptest.panel" Version="1.0.65" />
+    <Extension Id="com.endlessaudios.ceptest.panel" Version="1.0.66" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
