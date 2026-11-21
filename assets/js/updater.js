@@ -68,7 +68,8 @@
       "Update notices now use a full-screen view with a manual download link, support guidance, and an option to continue without updating."
     ],
     "1.0.60": ["SceneKeeper now checks for updates when the panel opens, not in the background while you work."],
-    "1.0.63": ["License activation now retries through macOS system curl when the embedded CEP HTTPS connection cannot reach the license server."]
+    "1.0.63": ["License activation now retries through macOS system curl when the embedded CEP HTTPS connection cannot reach the license server."],
+    "1.0.64": ["Fixed Continue without update so it immediately closes the update overlay and lets you keep working."]
   };
   const whatsNewDialog = document.getElementById("scene-keeper-whats-new");
   const whatsNewTitle = document.getElementById("scene-keeper-whats-new-title");
@@ -439,10 +440,8 @@
     if (continueWithoutUpdateButton) continueWithoutUpdateButton.hidden = true;
     notice.classList.remove("is-visible");
     if (noticeHideTimer) clearTimeout(noticeHideTimer);
-    noticeHideTimer = window.setTimeout(() => {
-      notice.hidden = true;
-      noticeHideTimer = null;
-    }, 230);
+    noticeHideTimer = null;
+    notice.hidden = true;
   }
 
   function retryPendingInstallation() {
@@ -684,7 +683,9 @@
     if (!whatsNewShown) storeCurrentVersion();
     if (retryUpdateButton) retryUpdateButton.addEventListener("click", retryPendingInstallation);
     if (continueWithoutUpdateButton) {
-      continueWithoutUpdateButton.addEventListener("click", () => {
+      continueWithoutUpdateButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
         continueWithoutUpdateThisSession = true;
         clearPendingUpdateVersion();
         scheduledVersion = "";
@@ -721,7 +722,12 @@
       });
     }
     if (continueWithoutUpdateButton) {
-      continueWithoutUpdateButton.addEventListener("click", clearNotice);
+      continueWithoutUpdateButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        continueWithoutUpdateThisSession = true;
+        clearNotice();
+      });
     }
     [manualUpdateLink].forEach((link) => {
       if (!link) return;

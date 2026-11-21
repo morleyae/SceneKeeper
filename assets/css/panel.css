@@ -103,6 +103,7 @@
     .scene-keeper-update-notice {
       position: fixed;
       z-index: 9000;
+      pointer-events: auto;
       inset: 0;
       display: flex;
       align-items: center;
@@ -160,6 +161,9 @@
     }
 
     .scene-keeper-update-actions button {
+      position: relative;
+      z-index: 1;
+      pointer-events: auto;
       width: 100%;
       min-height: 36px;
       min-width: 0;
