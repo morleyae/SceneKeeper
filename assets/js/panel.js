@@ -4340,7 +4340,8 @@
 
       if (!selectedFolderId) {
         const favoriteFoldersAtTop = sortFolderRecords(favoriteFolders
-          .filter((folder) => libraryFavoriteKeys.has(`folder:${folder.id}`)))
+          .filter((folder) => libraryFavoriteKeys.has(`folder:${folder.id}`) &&
+            (!folder.parentId || !favoriteFolders.some((candidate) => candidate.id === folder.parentId))))
           .map((folder) => ({ type: "folder", folder }));
         const rootFolders = sortFolderRecords(favoriteFolders
           .filter((folder) => (!folder.parentId || !favoriteFolders.some((candidate) => candidate.id === folder.parentId)) &&
