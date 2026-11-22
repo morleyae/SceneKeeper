@@ -641,7 +641,7 @@
         actions: {
           label: "LIBRARY BASICS · 3 OF 4",
           title: "Undo, copy and paste",
-          copy: "Undo and Redo track SceneKeeper changes. Select a clip or folder before Copy; Paste places copied items in the current collection.",
+          copy: "Undo and Redo track SceneKeeper changes. Select a clip or folder before Cut; Paste moves it to the current collection.",
           next: "Next",
           target: ".library-actions",
           focusTarget: true,
@@ -2597,7 +2597,7 @@
       }
       copiedLibraryEntries = source.map((entry) => ({ ...entry }));
       updateLibrarySelectionVisuals();
-      setResult(`${source.length} item(s) copied.`, "success");
+      setResult(`${source.length} item(s) ready to move.`, "success");
       return true;
     }
 
@@ -2612,35 +2612,42 @@
         .join(" / ") || "Home";
       const clipEntries = copiedLibraryEntries.filter((entry) => entry.type === "clip");
       const folderEntries = copiedLibraryEntries.filter((entry) => entry.type === "folder");
+      const selectedFolderIds = new Set(folderEntries.map((entry) => entry.folder.id));
+      const foldersToMove = folderEntries.filter((entry) =>
+        (entry.folder.parentId || "") !== destinationFolderId &&
+        !getFolderTrail(entry.folder.parentId).some((folder) => selectedFolderIds.has(folder.id)));
+      const clipsToMove = clipEntries.filter((entry) =>
+        (entry.clip.folderId || "") !== destinationFolderId &&
+        !getFolderTrail(entry.clip.folderId).some((folder) => selectedFolderIds.has(folder.id)));
+      const operations = [];
 
-      if (clipEntries.length) {
-        clipEntries.forEach((entry) => {
-          const encodedFolderId = JSON.stringify(encodeURIComponent(destinationFolderId));
-          callAE(`assignClipFavoriteFolder(${entry.clip.storageIndex}, ${encodedFolderId})`, "", () => {
-            selectedFolderId = destinationFolderId;
-            refreshFavorites(false, `"${getClipDisplayName(entry.clip)}" copied to "${destinationName}".`, entry.clip.storageIndex);
-          });
-        });
+      clipsToMove.forEach((entry) => {
+        const encodedFolderId = JSON.stringify(encodeURIComponent(destinationFolderId));
+        operations.push(`assignClipFavoriteFolder(${entry.clip.storageIndex}, ${encodedFolderId})`);
+      });
+      foldersToMove.forEach((entry) => {
+        const encodedFolderId = JSON.stringify(encodeURIComponent(entry.folder.id));
+        const encodedParentId = JSON.stringify(encodeURIComponent(destinationFolderId));
+        operations.push(`moveClipFolder(${encodedFolderId}, ${encodedParentId})`);
+      });
+
+      if (!operations.length) {
+        setResult("Selected items are already in this location.", "error");
+        return;
       }
 
-      if (folderEntries.length) {
-        folderEntries.forEach((entry, index) => {
-          const folder = entry.folder;
-          const folderName = `${folder.name}${index === 0 ? " Copy" : " Copy ${index + 1}"}`;
-          const id = `folder-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-          const encodedId = JSON.stringify(encodeURIComponent(id));
-          const encodedName = JSON.stringify(encodeURIComponent(folderName));
-          const encodedPath = JSON.stringify(encodeURIComponent(folder.sourcePath || ""));
-          const encodedParentId = JSON.stringify(encodeURIComponent(destinationFolderId));
-          callAE(`createClipFolder(${encodedId}, ${encodedName}, ${encodedPath}, ${encodedParentId})`, "", () => {
-            setResult(`"${folder.name}" copied to "${destinationName}".`, "success");
-          });
-        });
+      selectedFolderId = destinationFolderId;
+      function moveNextEntry(index) {
+        if (index >= operations.length) {
+          copiedLibraryEntries = [];
+          clearLibrarySelection();
+          refreshFavoriteFolders(() => refreshFavorites(false,
+            `Moved ${operations.length} item(s) to "${destinationName}".`));
+          return;
+        }
+        callAE(operations[index], "", () => moveNextEntry(index + 1));
       }
-
-      if (!clipEntries.length && !folderEntries.length) {
-        setResult("Nothing available to paste here.", "error");
-      }
+      moveNextEntry(0);
     }
 
     function closeLibraryContextMenu() {
@@ -3840,7 +3847,7 @@
         selectedLibraryKeys.add(entry.key);
         setSelectedResult(entry.key);
         const actions = [
-          { label: "Copy", run: () => copySelectedEntries(getSelectedLibraryEntries()) }
+          { label: "Cut", run: () => copySelectedEntries(getSelectedLibraryEntries()) }
         ];
         if (entry.type === "clip") {
           selectedFavoriteStorageIndex = entry.clip.storageIndex;
