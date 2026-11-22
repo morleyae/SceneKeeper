@@ -3281,6 +3281,9 @@ function insertClipFavoriteRecord(comp, record, placement) {
     var scaleY = record.scaleY === null || isNaN(record.scaleY) ? 100 : record.scaleY;
 
     var insertionTime = placement && placement.time !== undefined ? placement.time : comp.time;
+    var selectedLayer = placement && placement.insertAboveSelectedLayer && comp.selectedLayers && comp.selectedLayers.length
+        ? comp.selectedLayers[0]
+        : null;
     var blendingMode = getClipFrameBlendingMode();
     var mutedInsert = getClipMutedInsert() === "ON";
     var managesUndoGroup = !(placement && placement.joinUndoGroup === false);
@@ -3289,6 +3292,7 @@ function insertClipFavoriteRecord(comp, record, placement) {
     }
     try {
         var layer = comp.layers.add(sourceItem);
+        if (selectedLayer) layer.moveBefore(selectedLayer);
         if (placement) {
             placement.insertedLayer = layer;
         }
@@ -3335,7 +3339,7 @@ function insertClipFavorite(index) {
     if (isNaN(index) || index < 0 || index >= records.length) {
         return "ERROR: Select a clip first.";
     }
-    return insertClipFavoriteRecord(comp, records[index]);
+    return insertClipFavoriteRecord(comp, records[index], { insertAboveSelectedLayer: true });
 }
 
 function insertClipFavoriteIntoSelectedPrecomp(index) {
